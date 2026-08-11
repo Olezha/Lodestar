@@ -22,9 +22,9 @@ flowchart TD
 
     subgraph StreamingPipeline["2. Ingestion & Stream Processing"]
         Ingest[Alert Ingest Service]
-        KafkaRaw[(Kafka: Raw Events)]
+        KafkaRaw@{ shape: h-cyl, label: "Kafka: Raw Events Stream" }
         StreamEngine[Stream Analysis Engine]
-        KafkaAnomalies[(Kafka: Anomaly Events)]
+        KafkaAnomalies@{ shape: h-cyl, label: "Kafka: Anomaly Events Stream" }
     end
 
     subgraph DataStorage["3. Data & Rules Storage"]
@@ -34,7 +34,7 @@ flowchart TD
 
     subgraph DeliveryPipeline["4. Delivery Queue & Gateway"]
         Dispatcher[Notification Dispatcher]
-        RabbitMQ[(RabbitMQ: Viber Delivery Queue)]
+        RabbitMQ@{ shape: h-cyl, label: "RabbitMQ: Viber Delivery Queue" }
         ViberGateway[Viber Bot Gateway]
     end
 
@@ -64,6 +64,12 @@ flowchart TD
     ViberGateway -->|Update Subscriptions| DB
 ```
 
+### Architectural Rationale
+
+For a detailed architectural analysis on why **Apache Kafka** (Event Streaming) and **RabbitMQ** (Task Queue)
+were selected together in this system, read the engineering article:
+[RabbitMQ & Kafka: Historical Evolution & Architectural Choices](https://olehshklyar.com/2608-rabbitmq-and-kafka)
+
 ### Tech Stack:
 * **Language & Runtime:** Java 21, Spring Boot 3.3+ (Spring Data JPA, Spring Security, Spring Web, RestClient)
 * **Event Streaming:** Apache Kafka (KRaft mode, spring-kafka)
@@ -75,16 +81,46 @@ flowchart TD
 
 ---
 
-## Quickstart (Local Infrastructure)
+## Quickstart
 
-Spin up the local containerized environment (PostgreSQL, Redis, Kafka KRaft, RabbitMQ with Management UI):
+1. Spin up local infrastructure (PostgreSQL, Redis, Kafka KRaft, RabbitMQ):
 
 ```bash
-docker-compose up -d
+docker compose up -d
+```
+
+2. Start the Spring Boot application:
+
+```bash
+./gradlew bootRun
 ```
 
 ### Services & Endpoints:
-* **PostgreSQL:** `localhost:5432` (db: `lodestar_db`, user: `postgres`)
+* **Swagger UI:** `http://localhost:8080/swagger-ui.html`
+* **Actuator Health:** `http://localhost:8080/actuator/health`
+* **RabbitMQ Management UI:** `http://localhost:15672` (guest / guest)
+* **PostgreSQL:** `localhost:5433` (db: `lodestar_db`, user: `postgres`)
 * **Redis:** `localhost:6379`
 * **Apache Kafka (KRaft):** `localhost:9092`
-* **RabbitMQ Management UI:** `http://localhost:15672` (guest / guest)
+
+### Useful Infrastructure Commands:
+
+* **Check running container status:**
+  ```bash
+  docker compose ps
+  ```
+
+* **View service logs (e.g. Kafka or RabbitMQ):**
+  ```bash
+  docker compose logs -f kafka
+  ```
+
+* **Stop infrastructure:**
+  ```bash
+  docker compose down
+  ```
+
+* **Stop and wipe volume data (fresh start):**
+  ```bash
+  docker compose down -v
+  ```
