@@ -57,6 +57,7 @@ dependencies {
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:kafka")
     testImplementation("org.testcontainers:rabbitmq")
+    testRuntimeOnly("com.h2database:h2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -68,4 +69,7 @@ dependencyManagement {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    jvmArgs("-XX:+EnableDynamicAgentLoading")
+    environment("DOCKER_HOST", "unix:///var/run/docker.sock")
+    systemProperty("docker.client.api.version", "1.44")
 }
