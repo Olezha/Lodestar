@@ -24,6 +24,7 @@ repositories {
 }
 
 extra["testcontainersVersion"] = "1.20.1"
+extra["commons-lang3.version"] = "3.18.0"
 
 dependencies {
     // Spring Core & Web
