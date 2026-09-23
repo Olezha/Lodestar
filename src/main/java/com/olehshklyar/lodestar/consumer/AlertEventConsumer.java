@@ -1,7 +1,9 @@
 package com.olehshklyar.lodestar.consumer;
 
 import com.olehshklyar.lodestar.config.KafkaTopicConfig;
+import com.olehshklyar.lodestar.dispatcher.NotificationDispatcher;
 import com.olehshklyar.lodestar.dto.AlertEvent;
+import com.olehshklyar.lodestar.dto.NotificationTask;
 import com.olehshklyar.lodestar.entity.AlertEventHistory;
 import com.olehshklyar.lodestar.entity.AlertSubscription;
 import com.olehshklyar.lodestar.repository.AlertEventHistoryRepository;
@@ -14,11 +16,13 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Consumer that listens to raw alert events from Kafka, persists them to the immutable history log,
- * and matches events with active subscriptions for downstream dispatch.
+ * matches events with active subscriptions, and dispatches delivery tasks to RabbitMQ.
  */
 @Slf4j
 @Component
@@ -27,6 +31,7 @@ public class AlertEventConsumer {
 
     private final AlertSubscriptionRepository subscriptionRepository;
     private final AlertEventHistoryRepository historyRepository;
+    private final NotificationDispatcher notificationDispatcher;
 
     @KafkaListener(
             topics = KafkaTopicConfig.RAW_ALERTS_TOPIC,
@@ -62,12 +67,49 @@ public class AlertEventConsumer {
 
         log.info("Matched {} active subscription(s) for region [{}]", matchedSubscriptions.size(), event.regionId());
 
+        // 3. Filter by severity and dispatch notification tasks to RabbitMQ
         for (AlertSubscription sub : matchedSubscriptions) {
-            log.debug("Found recipient [{}] for channel [{}] in region [{}]",
-                    sub.getRecipientAddress(), sub.getChannel(), sub.getRegionId());
+            if (!isSeveritySufficient(event.severity(), sub.getMinSeverity())) {
+                log.debug("Skipping subscription [id={}] for user [{}]: event severity [{}] below minSeverity [{}]",
+                        sub.getId(), sub.getUserId(), event.severity(), sub.getMinSeverity());
+                continue;
+            }
 
-            // TODO: Step 3.2 - Filter matched subscriptions by minSeverity threshold (e.g. WARNING vs CRITICAL)
-            // TODO: Step 3.3 - Convert to NotificationTask DTO and dispatch to RabbitMQ (notifications.viber queue)
+            log.info("Dispatching notification task for user [{}] via channel [{}]",
+                    sub.getUserId(), sub.getChannel());
+
+            NotificationTask task = new NotificationTask(
+                    UUID.randomUUID().toString(),
+                    event.eventId(),
+                    sub.getUserId(),
+                    sub.getChannel(),
+                    sub.getRecipientAddress(),
+                    event.regionId(),
+                    String.format("Alert in %s: %s [%s]", event.regionId(), event.eventType(), event.severity()),
+                    event.severity(),
+                    Instant.now()
+            );
+
+            notificationDispatcher.dispatch(task);
         }
+    }
+
+    private boolean isSeveritySufficient(String eventSeverity, String minSeverity) {
+        if (minSeverity == null || minSeverity.isBlank()) {
+            return true;
+        }
+        return getSeverityWeight(eventSeverity) >= getSeverityWeight(minSeverity);
+    }
+
+    private int getSeverityWeight(String severity) {
+        if (severity == null) {
+            return 0;
+        }
+        return switch (severity.toUpperCase()) {
+            case "CRITICAL" -> 3;
+            case "WARNING" -> 2;
+            case "INFO" -> 1;
+            default -> 0;
+        };
     }
 }
