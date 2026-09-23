@@ -1,5 +1,7 @@
 # Lodestar 🧭
 
+[![CI](https://github.com/Olezha/Lodestar/actions/workflows/ci.yml/badge.svg)](https://github.com/Olezha/Lodestar/actions/workflows/ci.yml)
+
 **Lodestar** is a real-time event ingestion, historical archiving, and anomaly notification platform built on Java 21 and Spring Boot 3.3+.
 
 ---
