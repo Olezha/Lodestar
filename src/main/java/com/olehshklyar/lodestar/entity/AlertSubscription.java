@@ -2,6 +2,8 @@ package com.olehshklyar.lodestar.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -37,8 +39,9 @@ public class AlertSubscription {
     @Column(name = "user_id", nullable = false)
     private String userId;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "channel", nullable = false)
-    private String channel; // e.g., "VIBER"
+    private NotificationChannel channel;
 
     @Column(name = "recipient_address", nullable = false)
     private String recipientAddress; // e.g., Viber chat ID or phone number

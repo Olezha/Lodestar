@@ -2,6 +2,7 @@ package com.olehshklyar.lodestar.dispatcher;
 
 import com.olehshklyar.lodestar.config.RabbitMQConfig;
 import com.olehshklyar.lodestar.dto.NotificationTask;
+import com.olehshklyar.lodestar.entity.NotificationChannel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -33,10 +34,12 @@ public class NotificationDispatcher {
                 task.taskId(), routingKey);
     }
 
-    private String getRoutingKeyForChannel(String channel) {
-        if ("VIBER".equalsIgnoreCase(channel)) {
-            return RabbitMQConfig.VIBER_ROUTING_KEY;
+    private String getRoutingKeyForChannel(NotificationChannel channel) {
+        if (channel == null) {
+            throw new IllegalArgumentException("Notification channel must not be null");
         }
-        return RabbitMQConfig.VIBER_ROUTING_KEY; // default fallback
+        return switch (channel) {
+            case VIBER -> RabbitMQConfig.VIBER_ROUTING_KEY;
+        };
     }
 }

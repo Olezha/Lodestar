@@ -1,5 +1,6 @@
 package com.olehshklyar.lodestar.dto;
 
+import com.olehshklyar.lodestar.entity.NotificationChannel;
 import java.time.Instant;
 
 /**
@@ -9,7 +10,7 @@ public record NotificationTask(
     String taskId,
     String eventId,
     String userId,
-    String channel,
+    NotificationChannel channel,
     String recipientAddress,
     String regionId,
     String message,

@@ -1,13 +1,14 @@
 package com.olehshklyar.lodestar.consumer;
 
+import com.olehshklyar.lodestar.config.RabbitMQConfig;
 import com.olehshklyar.lodestar.dto.AlertEvent;
+import com.olehshklyar.lodestar.dto.NotificationTask;
 import com.olehshklyar.lodestar.entity.AlertEventHistory;
 import com.olehshklyar.lodestar.entity.AlertSubscription;
+import com.olehshklyar.lodestar.entity.NotificationChannel;
 import com.olehshklyar.lodestar.producer.AlertEventProducer;
 import com.olehshklyar.lodestar.repository.AlertEventHistoryRepository;
 import com.olehshklyar.lodestar.repository.AlertSubscriptionRepository;
-import com.olehshklyar.lodestar.config.RabbitMQConfig;
-import com.olehshklyar.lodestar.dto.NotificationTask;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -86,7 +87,7 @@ class AlertEventConsumerTest {
         // 1. Active subscription for KYIV_REGION
         subscriptionRepository.save(AlertSubscription.builder()
                 .userId("user-101")
-                .channel("VIBER")
+                .channel(NotificationChannel.VIBER)
                 .recipientAddress("viber-chat-id-101")
                 .regionId("KYIV_REGION")
                 .minSeverity("WARNING")
@@ -96,7 +97,7 @@ class AlertEventConsumerTest {
         // 2. Inactive subscription for KYIV_REGION
         subscriptionRepository.save(AlertSubscription.builder()
                 .userId("user-102")
-                .channel("VIBER")
+                .channel(NotificationChannel.VIBER)
                 .recipientAddress("viber-chat-id-102")
                 .regionId("KYIV_REGION")
                 .minSeverity("WARNING")
@@ -106,7 +107,7 @@ class AlertEventConsumerTest {
         // 3. Active subscription for LVIV_REGION
         subscriptionRepository.save(AlertSubscription.builder()
                 .userId("user-103")
-                .channel("VIBER")
+                .channel(NotificationChannel.VIBER)
                 .recipientAddress("viber-chat-id-103")
                 .regionId("LVIV_REGION")
                 .minSeverity("INFO")
@@ -149,7 +150,7 @@ class AlertEventConsumerTest {
         NotificationTask task = (NotificationTask) received;
         assertThat(task.eventId()).isEqualTo(eventId);
         assertThat(task.userId()).isEqualTo("user-101");
-        assertThat(task.channel()).isEqualTo("VIBER");
+        assertThat(task.channel()).isEqualTo(NotificationChannel.VIBER);
         assertThat(task.recipientAddress()).isEqualTo("viber-chat-id-101");
         assertThat(task.regionId()).isEqualTo("KYIV_REGION");
         assertThat(task.severity()).isEqualTo("WARNING");

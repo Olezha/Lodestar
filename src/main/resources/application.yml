@@ -42,6 +42,12 @@ spring:
     port: 5672
     username: guest
     password: guest
+    cache:
+      channel:
+        size: 25 # Channel pool size (number of reusable channels per connection)
+        checkout-timeout: 5000ms # Max wait time to borrow a pooled channel (default: 0; enforces pool size as a hard limit)
+      connection:
+        mode: channel # Multiplex channels over a single TCP connection (use 'connection' to pool TCP sockets)
 
 server:
   port: 8080
