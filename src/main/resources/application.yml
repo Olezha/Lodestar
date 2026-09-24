@@ -48,6 +48,25 @@ spring:
         checkout-timeout: 5000ms # Max wait time to borrow a pooled channel (default: 0; enforces pool size as a hard limit)
       connection:
         mode: channel # Multiplex channels over a single TCP connection (use 'connection' to pool TCP sockets)
+    listener:
+      simple:
+        concurrency: 2 # Minimum/initial number of concurrent consumer threads (and dedicated AMQP channels)
+        max-concurrency: 5 # Maximum consumer threads; dynamically scales up during alert traffic spikes
+        prefetch: 10 # AMQP basic.qos limit per consumer channel to ensure fair dispatch and prevent buffer bloat
+        default-requeue-rejected: false # Route exhausted/failed messages to DLX (requeue=false) instead of poison-pill looping
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+          multiplier: 2.0
+          max-interval: 10000ms
+
+lodestar:
+  viber:
+    api-url: https://chatapi.viber.com/pa/send_message
+    auth-token: ${VIBER_AUTH_TOKEN:dummy-token}
+    sender-name: Lodestar Alerts
+    dry-run: true
 
 server:
   port: 8080
