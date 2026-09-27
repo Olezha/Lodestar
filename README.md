@@ -70,7 +70,7 @@ flowchart TD
 
 For a detailed architectural analysis on why **Apache Kafka** (Event Streaming) and **RabbitMQ** (Task Queue)
 were selected together in this system, read the engineering article:
-[RabbitMQ & Kafka: Historical Evolution & Architectural Choices](https://olehshklyar.com/2608-rabbitmq-and-kafka)
+[RabbitMQ & Kafka: Historical Evolution & Architectural Choices (in Ukrainian)](https://olehshklyar.com/2609-rabbitmq-and-kafka)
 
 ### Tech Stack:
 * **Language & Runtime:** Java 21, Spring Boot 3.3+ (Spring Data JPA, Spring Security, Spring Web, RestClient)
