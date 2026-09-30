@@ -54,6 +54,60 @@ class NotificationDispatcherTest {
     }
 
     @Test
+    @DisplayName("Should publish NotificationTask to RabbitMQ with DISCORD routing key")
+    void shouldDispatchDiscordNotificationTask() {
+        // Arrange
+        NotificationTask task = new NotificationTask(
+                UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
+                "user-102",
+                NotificationChannel.DISCORD,
+                "https://discord.com/api/webhooks/123/abc",
+                "KYIV_REGION",
+                "Discord alert",
+                "CRITICAL",
+                Instant.now()
+        );
+
+        // Act
+        notificationDispatcher.dispatch(task);
+
+        // Assert
+        verify(rabbitTemplate).convertAndSend(
+                RabbitMQConfig.NOTIFICATIONS_EXCHANGE,
+                RabbitMQConfig.DISCORD_ROUTING_KEY,
+                task
+        );
+    }
+
+    @Test
+    @DisplayName("Should publish NotificationTask to RabbitMQ with NTFY routing key")
+    void shouldDispatchNtfyNotificationTask() {
+        // Arrange
+        NotificationTask task = new NotificationTask(
+                UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
+                "user-103",
+                NotificationChannel.NTFY,
+                "lodestar-alerts",
+                "KYIV_REGION",
+                "ntfy alert",
+                "INFO",
+                Instant.now()
+        );
+
+        // Act
+        notificationDispatcher.dispatch(task);
+
+        // Assert
+        verify(rabbitTemplate).convertAndSend(
+                RabbitMQConfig.NOTIFICATIONS_EXCHANGE,
+                RabbitMQConfig.NTFY_ROUTING_KEY,
+                task
+        );
+    }
+
+    @Test
     @DisplayName("Should throw IllegalArgumentException when channel is null")
     void shouldThrowExceptionWhenChannelIsNull() {
         // Arrange

@@ -26,9 +26,18 @@ public class RabbitMQConfig {
 
     public static final String VIBER_QUEUE = "notifications.viber";
     public static final String VIBER_DLQ = "notifications.viber.dlq";
-
     public static final String VIBER_ROUTING_KEY = "notification.viber";
     public static final String VIBER_DLQ_ROUTING_KEY = "notification.viber.dlq";
+
+    public static final String DISCORD_QUEUE = "notifications.discord";
+    public static final String DISCORD_DLQ = "notifications.discord.dlq";
+    public static final String DISCORD_ROUTING_KEY = "notification.discord";
+    public static final String DISCORD_DLQ_ROUTING_KEY = "notification.discord.dlq";
+
+    public static final String NTFY_QUEUE = "notifications.ntfy";
+    public static final String NTFY_DLQ = "notifications.ntfy.dlq";
+    public static final String NTFY_ROUTING_KEY = "notification.ntfy";
+    public static final String NTFY_DLQ_ROUTING_KEY = "notification.ntfy.dlq";
 
     @Bean
     public TopicExchange notificationsExchange() {
@@ -61,6 +70,52 @@ public class RabbitMQConfig {
     @Bean
     public Binding viberDlqBinding(Queue viberDlq, DirectExchange notificationsDlx) {
         return BindingBuilder.bind(viberDlq).to(notificationsDlx).with(VIBER_DLQ_ROUTING_KEY);
+    }
+
+    @Bean
+    public Queue discordQueue() {
+        return QueueBuilder.durable(DISCORD_QUEUE)
+                .withArgument("x-dead-letter-exchange", NOTIFICATIONS_DLX)
+                .withArgument("x-dead-letter-routing-key", DISCORD_DLQ_ROUTING_KEY)
+                .build();
+    }
+
+    @Bean
+    public Queue discordDlq() {
+        return QueueBuilder.durable(DISCORD_DLQ).build();
+    }
+
+    @Bean
+    public Binding discordBinding(Queue discordQueue, TopicExchange notificationsExchange) {
+        return BindingBuilder.bind(discordQueue).to(notificationsExchange).with(DISCORD_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding discordDlqBinding(Queue discordDlq, DirectExchange notificationsDlx) {
+        return BindingBuilder.bind(discordDlq).to(notificationsDlx).with(DISCORD_DLQ_ROUTING_KEY);
+    }
+
+    @Bean
+    public Queue ntfyQueue() {
+        return QueueBuilder.durable(NTFY_QUEUE)
+                .withArgument("x-dead-letter-exchange", NOTIFICATIONS_DLX)
+                .withArgument("x-dead-letter-routing-key", NTFY_DLQ_ROUTING_KEY)
+                .build();
+    }
+
+    @Bean
+    public Queue ntfyDlq() {
+        return QueueBuilder.durable(NTFY_DLQ).build();
+    }
+
+    @Bean
+    public Binding ntfyBinding(Queue ntfyQueue, TopicExchange notificationsExchange) {
+        return BindingBuilder.bind(ntfyQueue).to(notificationsExchange).with(NTFY_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding ntfyDlqBinding(Queue ntfyDlq, DirectExchange notificationsDlx) {
+        return BindingBuilder.bind(ntfyDlq).to(notificationsDlx).with(NTFY_DLQ_ROUTING_KEY);
     }
 
     @Bean
