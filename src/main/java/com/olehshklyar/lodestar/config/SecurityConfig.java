@@ -20,7 +20,10 @@ public class SecurityConfig {
                     "/swagger-ui.html",
                     "/swagger-ui/**",
                     "/v3/api-docs/**",
-                    "/actuator/**"
+                    "/actuator/**",
+                    "/api/v1/viber/webhook",
+                    "/api/v1/subscriptions/**",
+                    "/api/v1/alerts/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             );
