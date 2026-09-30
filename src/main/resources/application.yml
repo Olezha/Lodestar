@@ -3,9 +3,9 @@ spring:
     name: lodestar
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/lodestar_db
-    username: postgres
-    password: postgres_password
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/lodestar_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres_password}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -24,11 +24,11 @@ spring:
 
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: lodestar-group
       auto-offset-reset: earliest
@@ -43,10 +43,10 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
     cache:
       channel:
         size: 25 # Channel pool size (number of reusable channels per connection)
@@ -68,10 +68,10 @@ spring:
 
 lodestar:
   viber:
-    api-url: https://chatapi.viber.com/pa/send_message
+    api-url: ${VIBER_API_URL:https://chatapi.viber.com/pa/send_message}
     auth-token: ${VIBER_AUTH_TOKEN:dummy-token}
-    sender-name: Lodestar Alerts
-    dry-run: true
+    sender-name: ${VIBER_SENDER_NAME:Lodestar Alerts}
+    dry-run: ${VIBER_DRY_RUN:true}
 
 server:
   port: 8080

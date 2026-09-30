@@ -93,29 +93,13 @@ were selected together in this system, read the engineering article:
   docker compose up -d
   ```
 
-* **Start only PostgreSQL (for database/migration development):**
-  ```bash
-  docker compose up -d postgres
-  ```
-
 ### 2. Run the Application
 
-* **Via IDE:**
-  1. Ensure infrastructure is running (`docker compose up -d`).
-  2. Open `LodestarApplication` and **Run** or **Debug** next to the `main()` method.
-
-* **Via Gradle CLI:**
+* **Via IDE:** Run or debug `LodestarApplication.main()`.
+* **Via CLI:**
   ```bash
   ./gradlew bootRun
   ```
-
-### Services & Endpoints:
-* [**Swagger UI**](http://localhost:8080/swagger-ui.html)
-* [**Actuator Health**](http://localhost:8080/actuator/health)
-* [**RabbitMQ Management UI**](http://localhost:15672) (guest / guest)
-* **PostgreSQL:** `localhost:5433` (db: `lodestar_db`, user: `postgres`)
-* **Redis:** `localhost:6379`
-* **Apache Kafka (KRaft):** `localhost:9092`
 
 ### Useful Infrastructure Commands:
 
@@ -130,10 +114,7 @@ were selected together in this system, read the engineering article:
   docker compose logs -f
 
   # Follow logs for a specific service
-  docker compose logs -f kafka
-  docker compose logs -f rabbitmq
-  docker compose logs -f redis
-  docker compose logs -f postgres
+  docker compose logs -f rabbitmq # or postgres, redis, kafka
   ```
 
 * **Interactive database & cache CLIs:**
@@ -154,6 +135,14 @@ were selected together in this system, read the engineering article:
   ```bash
   docker compose down -v
   ```
+
+### Services & Endpoints:
+* [**Swagger UI**](http://localhost:8080/swagger-ui.html)
+* [**Actuator Health**](http://localhost:8080/actuator/health)
+* [**RabbitMQ Management UI**](http://localhost:15672) (guest / guest)
+* **PostgreSQL:** `localhost:5432` (db: `lodestar_db`, user: `postgres`)
+* **Redis:** `localhost:6379`
+* **Apache Kafka (KRaft):** `localhost:9092`
 
 ---
 
