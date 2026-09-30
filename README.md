@@ -76,31 +76,43 @@ were selected together in this system, read the engineering article:
 * **Language & Runtime:** Java 21, Spring Boot 3.3+ (Spring Data JPA, Spring Security, Spring Web, RestClient)
 * **Event Streaming:** Apache Kafka (KRaft mode, spring-kafka)
 * **Message Queue:** RabbitMQ (spring-amqp, AMQP 0-9-1, DLX & Retry Exchanges)
-* **Persistence & Caching:** PostgreSQL 16, Redis 7
+* **Persistence & Caching:** PostgreSQL 16, Flyway 10, Redis 7
 * **Orchestration & Cloud:** Docker, Kubernetes (Deployments, Services, Ingress, HPA), Helm
 * **Observability:** Prometheus, Grafana, Spring Boot Actuator, Micrometer Observation API
 * **Testing:** Testcontainers (Kafka, RabbitMQ, PostgreSQL), JUnit 5, AssertJ
 
 ---
 
-## Quickstart
+## Quickstart & Local Development
 
-1. Spin up local infrastructure (PostgreSQL, Redis, Kafka KRaft, RabbitMQ):
+### 1. Run Infrastructure Dependencies (Docker Compose)
+`docker-compose.yml` manages all external services (PostgreSQL, Redis, Kafka KRaft, RabbitMQ) independently of the Java application:
 
-```bash
-docker compose up -d
-```
+* **Start all infrastructure services:**
+  ```bash
+  docker compose up -d
+  ```
 
-2. Start the Spring Boot application:
+* **Start only PostgreSQL (for database/migration development):**
+  ```bash
+  docker compose up -d postgres
+  ```
 
-```bash
-./gradlew bootRun
-```
+### 2. Run the Application
+
+* **Via IDE:**
+  1. Ensure infrastructure is running (`docker compose up -d`).
+  2. Open `LodestarApplication` and **Run** or **Debug** next to the `main()` method.
+
+* **Via Gradle CLI:**
+  ```bash
+  ./gradlew bootRun
+  ```
 
 ### Services & Endpoints:
-* **Swagger UI:** `http://localhost:8080/swagger-ui.html`
-* **Actuator Health:** `http://localhost:8080/actuator/health`
-* **RabbitMQ Management UI:** `http://localhost:15672` (guest / guest)
+* [**Swagger UI**](http://localhost:8080/swagger-ui.html)
+* [**Actuator Health**](http://localhost:8080/actuator/health)
+* [**RabbitMQ Management UI**](http://localhost:15672) (guest / guest)
 * **PostgreSQL:** `localhost:5433` (db: `lodestar_db`, user: `postgres`)
 * **Redis:** `localhost:6379`
 * **Apache Kafka (KRaft):** `localhost:9092`
@@ -112,9 +124,25 @@ docker compose up -d
   docker compose ps
   ```
 
-* **View service logs (e.g. Kafka or RabbitMQ):**
+* **View service logs:**
   ```bash
+  # Follow logs across all services
+  docker compose logs -f
+
+  # Follow logs for a specific service
   docker compose logs -f kafka
+  docker compose logs -f rabbitmq
+  docker compose logs -f redis
+  docker compose logs -f postgres
+  ```
+
+* **Interactive database & cache CLIs:**
+  ```bash
+  # Open PostgreSQL interactive terminal (psql)
+  docker compose exec postgres psql -U postgres -d lodestar_db
+
+  # Open Redis interactive CLI
+  docker compose exec redis redis-cli
   ```
 
 * **Stop infrastructure:**
@@ -126,3 +154,15 @@ docker compose up -d
   ```bash
   docker compose down -v
   ```
+
+---
+
+## Testing
+
+Run the automated test suite (unit tests and containerized integration tests):
+
+```bash
+./gradlew test
+```
+
+> **Note:** Integration tests utilize **Testcontainers** to automatically provision and dispose of isolated Kafka, RabbitMQ, Redis, and PostgreSQL instances during test runs. Pre-existing `docker compose` services are not required for test execution.
