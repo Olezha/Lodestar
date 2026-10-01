@@ -42,8 +42,8 @@ class SubscriptionServiceTest {
         sampleSubscription = AlertSubscription.builder()
                 .id(1L)
                 .userId("user-100")
-                .channel(NotificationChannel.VIBER)
-                .recipientAddress("viber-chat-id-100")
+                .channel(NotificationChannel.DISCORD)
+                .recipientAddress("https://discord.com/api/webhooks/100/token")
                 .regionId("KYIV_REGION")
                 .minSeverity("INFO")
                 .active(true)
@@ -56,8 +56,8 @@ class SubscriptionServiceTest {
     void shouldCreateSubscription() {
         CreateSubscriptionRequest request = new CreateSubscriptionRequest(
                 "user-100",
-                NotificationChannel.VIBER,
-                "viber-chat-id-100",
+                NotificationChannel.DISCORD,
+                "https://discord.com/api/webhooks/100/token",
                 "KYIV_REGION",
                 "WARNING"
         );
@@ -72,7 +72,7 @@ class SubscriptionServiceTest {
 
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.userId()).isEqualTo("user-100");
-        assertThat(response.channel()).isEqualTo(NotificationChannel.VIBER);
+        assertThat(response.channel()).isEqualTo(NotificationChannel.DISCORD);
         assertThat(response.regionId()).isEqualTo("KYIV_REGION");
         assertThat(response.minSeverity()).isEqualTo("WARNING");
         assertThat(response.active()).isTrue();
@@ -117,33 +117,12 @@ class SubscriptionServiceTest {
     @Test
     @DisplayName("Should deactivate subscriptions for specified recipient and channel")
     void shouldDeactivateSubscriptionsForRecipient() {
-        when(subscriptionRepository.findByRecipientAddressAndChannel("viber-chat-id-100", NotificationChannel.VIBER))
+        when(subscriptionRepository.findByRecipientAddressAndChannel("https://discord.com/api/webhooks/100/token", NotificationChannel.DISCORD))
                 .thenReturn(List.of(sampleSubscription));
 
-        subscriptionService.deactivateSubscriptionsForRecipient("viber-chat-id-100", NotificationChannel.VIBER);
+        subscriptionService.deactivateSubscriptionsForRecipient("https://discord.com/api/webhooks/100/token", NotificationChannel.DISCORD);
 
         assertThat(sampleSubscription.isActive()).isFalse();
         verify(subscriptionRepository).saveAll(List.of(sampleSubscription));
-    }
-
-    @Test
-    @DisplayName("Should register new default Viber subscription if user has none")
-    void shouldRegisterNewViberSubscriber() {
-        when(subscriptionRepository.findByRecipientAddressAndChannel("new-viber-id", NotificationChannel.VIBER))
-                .thenReturn(List.of());
-
-        when(subscriptionRepository.save(any(AlertSubscription.class))).thenAnswer(invocation -> {
-            AlertSubscription sub = invocation.getArgument(0);
-            sub.setId(55L);
-            return sub;
-        });
-
-        SubscriptionResponse response = subscriptionService.activateOrRegisterViberSubscriber("new-viber-id", "Alice");
-
-        assertThat(response.id()).isEqualTo(55L);
-        assertThat(response.channel()).isEqualTo(NotificationChannel.VIBER);
-        assertThat(response.recipientAddress()).isEqualTo("new-viber-id");
-        assertThat(response.userId()).isEqualTo("Alice");
-        assertThat(response.active()).isTrue();
     }
 }

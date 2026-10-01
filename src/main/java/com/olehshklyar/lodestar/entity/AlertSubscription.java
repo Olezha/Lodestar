@@ -44,7 +44,7 @@ public class AlertSubscription {
     private NotificationChannel channel;
 
     @Column(name = "recipient_address", nullable = false)
-    private String recipientAddress; // e.g., Viber chat ID or phone number
+    private String recipientAddress; // e.g., Discord webhook URL or ntfy topic
 
     @Column(name = "region_id", nullable = false)
     private String regionId; // e.g., "KYIV_REGION"

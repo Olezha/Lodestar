@@ -81,7 +81,7 @@ class AlertEventConsumerTest {
     private AlertEventHistoryRepository historyRepository;
 
     @MockBean
-    private ViberNotificationConsumer viberNotificationConsumer;
+    private DiscordNotificationConsumer discordNotificationConsumer;
 
     @BeforeEach
     void setUp() {
@@ -91,8 +91,8 @@ class AlertEventConsumerTest {
         // 1. Active subscription for KYIV_REGION
         subscriptionRepository.save(AlertSubscription.builder()
                 .userId("user-101")
-                .channel(NotificationChannel.VIBER)
-                .recipientAddress("viber-chat-id-101")
+                .channel(NotificationChannel.DISCORD)
+                .recipientAddress("https://discord.com/api/webhooks/101/token")
                 .regionId("KYIV_REGION")
                 .minSeverity("WARNING")
                 .active(true)
@@ -101,8 +101,8 @@ class AlertEventConsumerTest {
         // 2. Inactive subscription for KYIV_REGION
         subscriptionRepository.save(AlertSubscription.builder()
                 .userId("user-102")
-                .channel(NotificationChannel.VIBER)
-                .recipientAddress("viber-chat-id-102")
+                .channel(NotificationChannel.DISCORD)
+                .recipientAddress("https://discord.com/api/webhooks/102/token")
                 .regionId("KYIV_REGION")
                 .minSeverity("WARNING")
                 .active(false)
@@ -111,8 +111,8 @@ class AlertEventConsumerTest {
         // 3. Active subscription for LVIV_REGION
         subscriptionRepository.save(AlertSubscription.builder()
                 .userId("user-103")
-                .channel(NotificationChannel.VIBER)
-                .recipientAddress("viber-chat-id-103")
+                .channel(NotificationChannel.DISCORD)
+                .recipientAddress("https://discord.com/api/webhooks/103/token")
                 .regionId("LVIV_REGION")
                 .minSeverity("INFO")
                 .active(true)
@@ -147,20 +147,20 @@ class AlertEventConsumerTest {
         assertThat(history.get(0).getEventType()).isEqualTo("AIR_RAID");
         assertThat(history.get(0).getKafkaTopic()).isEqualTo("events.raw-alerts");
 
-        // Assert - verify notification task was dispatched to RabbitMQ notifications.viber queue
-        Object received = rabbitTemplate.receiveAndConvert(RabbitMQConfig.VIBER_QUEUE, 10000);
+        // Assert - verify notification task was dispatched to RabbitMQ notifications.discord queue
+        Object received = rabbitTemplate.receiveAndConvert(RabbitMQConfig.DISCORD_QUEUE, 10000);
         assertThat(received).isNotNull();
         assertThat(received).isInstanceOf(NotificationTask.class);
         NotificationTask task = (NotificationTask) received;
         assertThat(task.eventId()).isEqualTo(eventId);
         assertThat(task.userId()).isEqualTo("user-101");
-        assertThat(task.channel()).isEqualTo(NotificationChannel.VIBER);
-        assertThat(task.recipientAddress()).isEqualTo("viber-chat-id-101");
+        assertThat(task.channel()).isEqualTo(NotificationChannel.DISCORD);
+        assertThat(task.recipientAddress()).isEqualTo("https://discord.com/api/webhooks/101/token");
         assertThat(task.regionId()).isEqualTo("KYIV_REGION");
         assertThat(task.severity()).isEqualTo("WARNING");
 
         // Verify only 1 message was sent (user-102 is inactive, user-103 is in LVIV_REGION)
-        Object second = rabbitTemplate.receiveAndConvert(RabbitMQConfig.VIBER_QUEUE, 1000);
+        Object second = rabbitTemplate.receiveAndConvert(RabbitMQConfig.DISCORD_QUEUE, 1000);
         assertThat(second).isNull();
     }
 }

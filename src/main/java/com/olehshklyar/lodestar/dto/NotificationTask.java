@@ -4,7 +4,7 @@ import com.olehshklyar.lodestar.entity.NotificationChannel;
 import java.time.Instant;
 
 /**
- * Task payload dispatched to RabbitMQ queues for delivery by channel gateways (e.g., Viber).
+ * Task payload dispatched to RabbitMQ queues for delivery by channel gateways (e.g., Discord, ntfy).
  */
 public record NotificationTask(
     String taskId,

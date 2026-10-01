@@ -27,33 +27,6 @@ class NotificationDispatcherTest {
     private NotificationDispatcher notificationDispatcher;
 
     @Test
-    @DisplayName("Should publish NotificationTask to RabbitMQ with VIBER routing key")
-    void shouldDispatchViberNotificationTask() {
-        // Arrange
-        NotificationTask task = new NotificationTask(
-                UUID.randomUUID().toString(),
-                UUID.randomUUID().toString(),
-                "user-101",
-                NotificationChannel.VIBER,
-                "viber-chat-id-101",
-                "KYIV_REGION",
-                "Alert message",
-                "WARNING",
-                Instant.now()
-        );
-
-        // Act
-        notificationDispatcher.dispatch(task);
-
-        // Assert
-        verify(rabbitTemplate).convertAndSend(
-                RabbitMQConfig.NOTIFICATIONS_EXCHANGE,
-                RabbitMQConfig.VIBER_ROUTING_KEY,
-                task
-        );
-    }
-
-    @Test
     @DisplayName("Should publish NotificationTask to RabbitMQ with DISCORD routing key")
     void shouldDispatchDiscordNotificationTask() {
         // Arrange
@@ -116,7 +89,7 @@ class NotificationDispatcherTest {
                 UUID.randomUUID().toString(),
                 "user-101",
                 null,
-                "viber-chat-id-101",
+                "https://discord.com/api/webhooks/101/token",
                 "KYIV_REGION",
                 "Alert message",
                 "WARNING",

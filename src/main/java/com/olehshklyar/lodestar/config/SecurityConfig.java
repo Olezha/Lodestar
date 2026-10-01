@@ -25,7 +25,6 @@ public class SecurityConfig {
                     "/swagger-ui/**",
                     "/v3/api-docs/**",
                     "/actuator/**",
-                    "/api/v1/viber/webhook",
                     "/api/v1/subscriptions/**",
                     "/api/v1/alerts/**"
                 ).permitAll()

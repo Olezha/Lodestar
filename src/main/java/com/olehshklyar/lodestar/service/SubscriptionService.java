@@ -20,6 +20,4 @@ public interface SubscriptionService {
     void deleteSubscription(Long id);
 
     void deactivateSubscriptionsForRecipient(String recipientAddress, NotificationChannel channel);
-
-    SubscriptionResponse activateOrRegisterViberSubscriber(String viberUserId, String userName);
 }

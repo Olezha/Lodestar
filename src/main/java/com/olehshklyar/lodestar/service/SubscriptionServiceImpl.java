@@ -120,30 +120,4 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         subscriptionRepository.saveAll(subscriptions);
         log.info("Deactivated {} subscription(s) for recipient: {}", subscriptions.size(), recipientAddress);
     }
-
-    @Override
-    @Transactional
-    public SubscriptionResponse activateOrRegisterViberSubscriber(String viberUserId, String userName) {
-        List<AlertSubscription> existingSubscriptions = subscriptionRepository
-                .findByRecipientAddressAndChannel(viberUserId, NotificationChannel.VIBER);
-
-        if (!existingSubscriptions.isEmpty()) {
-            existingSubscriptions.forEach(sub -> sub.setActive(true));
-            subscriptionRepository.saveAll(existingSubscriptions);
-            log.info("Re-activated {} existing Viber subscription(s) for user: {}", existingSubscriptions.size(), viberUserId);
-            return SubscriptionResponse.fromEntity(existingSubscriptions.getFirst());
-        }
-
-        log.info("Registering new default Viber subscription for user: {} ({})", viberUserId, userName);
-        AlertSubscription defaultSubscription = AlertSubscription.builder()
-                .userId(userName != null && !userName.isBlank() ? userName : viberUserId)
-                .channel(NotificationChannel.VIBER)
-                .recipientAddress(viberUserId)
-                .regionId("ALL")
-                .minSeverity("INFO")
-                .active(true)
-                .build();
-
-        return SubscriptionResponse.fromEntity(subscriptionRepository.save(defaultSubscription));
-    }
 }

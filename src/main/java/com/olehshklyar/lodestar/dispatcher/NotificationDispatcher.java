@@ -39,7 +39,6 @@ public class NotificationDispatcher {
             throw new IllegalArgumentException("Notification channel must not be null");
         }
         return switch (channel) {
-            case VIBER -> RabbitMQConfig.VIBER_ROUTING_KEY;
             case DISCORD -> RabbitMQConfig.DISCORD_ROUTING_KEY;
             case NTFY -> RabbitMQConfig.NTFY_ROUTING_KEY;
         };

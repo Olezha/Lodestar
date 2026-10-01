@@ -67,11 +67,6 @@ spring:
           max-interval: 10000ms
 
 lodestar:
-  viber:
-    api-url: ${VIBER_API_URL:https://chatapi.viber.com/pa/send_message}
-    auth-token: ${VIBER_AUTH_TOKEN:dummy-token}
-    sender-name: ${VIBER_SENDER_NAME:Lodestar Alerts}
-    dry-run: ${VIBER_DRY_RUN:true}
   discord:
     default-webhook-url: ${DISCORD_WEBHOOK_URL:}
     username: ${DISCORD_USERNAME:Lodestar Alerts}

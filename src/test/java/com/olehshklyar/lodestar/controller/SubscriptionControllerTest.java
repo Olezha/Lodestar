@@ -49,13 +49,13 @@ class SubscriptionControllerTest {
     void shouldCreateSubscription() throws Exception {
         CreateSubscriptionRequest request = new CreateSubscriptionRequest(
                 "user-1",
-                NotificationChannel.VIBER,
-                "viber-chat-id-1",
+                NotificationChannel.DISCORD,
+                "https://discord.com/api/webhooks/1/token",
                 "KYIV_REGION",
                 "WARNING"
         );
         SubscriptionResponse response = new SubscriptionResponse(
-                1L, "user-1", NotificationChannel.VIBER, "viber-chat-id-1",
+                1L, "user-1", NotificationChannel.DISCORD, "https://discord.com/api/webhooks/1/token",
                 "KYIV_REGION", "WARNING", true, Instant.now()
         );
 
@@ -75,7 +75,7 @@ class SubscriptionControllerTest {
     @DisplayName("GET /api/v1/subscriptions/{id} should return subscription when found")
     void shouldGetSubscriptionById() throws Exception {
         SubscriptionResponse response = new SubscriptionResponse(
-                1L, "user-1", NotificationChannel.VIBER, "viber-chat-id-1",
+                1L, "user-1", NotificationChannel.DISCORD, "https://discord.com/api/webhooks/1/token",
                 "KYIV_REGION", "WARNING", true, Instant.now()
         );
 
@@ -101,7 +101,7 @@ class SubscriptionControllerTest {
     @DisplayName("GET /api/v1/subscriptions should return list of subscriptions")
     void shouldListSubscriptions() throws Exception {
         SubscriptionResponse response = new SubscriptionResponse(
-                1L, "user-1", NotificationChannel.VIBER, "viber-chat-id-1",
+                1L, "user-1", NotificationChannel.DISCORD, "https://discord.com/api/webhooks/1/token",
                 "KYIV_REGION", "WARNING", true, Instant.now()
         );
 
@@ -119,7 +119,7 @@ class SubscriptionControllerTest {
     void shouldUpdateSubscription() throws Exception {
         UpdateSubscriptionRequest updateRequest = new UpdateSubscriptionRequest("LVIV_REGION", "INFO", true);
         SubscriptionResponse updatedResponse = new SubscriptionResponse(
-                1L, "user-1", NotificationChannel.VIBER, "viber-chat-id-1",
+                1L, "user-1", NotificationChannel.DISCORD, "https://discord.com/api/webhooks/1/token",
                 "LVIV_REGION", "INFO", true, Instant.now()
         );
 
