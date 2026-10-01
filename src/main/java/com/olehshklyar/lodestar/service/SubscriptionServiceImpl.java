@@ -20,6 +20,7 @@ import java.util.List;
 public class SubscriptionServiceImpl implements SubscriptionService {
 
     private final AlertSubscriptionRepository subscriptionRepository;
+    private final SubscriptionCacheService subscriptionCacheService;
 
     @Override
     @Transactional
@@ -36,7 +37,9 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 .active(true)
                 .build();
 
-        return SubscriptionResponse.fromEntity(subscriptionRepository.save(subscription));
+        SubscriptionResponse response = SubscriptionResponse.fromEntity(subscriptionRepository.save(subscription));
+        subscriptionCacheService.evictRegion(request.regionId());
+        return response;
     }
 
     @Override
@@ -79,6 +82,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         AlertSubscription subscription = subscriptionRepository.findById(id)
                 .orElseThrow(() -> new SubscriptionNotFoundException(id));
 
+        String oldRegionId = subscription.getRegionId();
+
         if (request.regionId() != null && !request.regionId().isBlank()) {
             subscription.setRegionId(request.regionId());
         }
@@ -92,17 +97,26 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         AlertSubscription updatedSubscription = subscriptionRepository.save(subscription);
         log.info("Updated subscription ID: {}, active: {}, region: {}",
                 updatedSubscription.getId(), updatedSubscription.isActive(), updatedSubscription.getRegionId());
+
+        subscriptionCacheService.evictRegion(oldRegionId);
+        if (updatedSubscription.getRegionId() != null && !updatedSubscription.getRegionId().equalsIgnoreCase(oldRegionId)) {
+            subscriptionCacheService.evictRegion(updatedSubscription.getRegionId());
+        }
+
         return SubscriptionResponse.fromEntity(updatedSubscription);
     }
 
     @Override
     @Transactional
     public void deleteSubscription(Long id) {
-        if (!subscriptionRepository.existsById(id)) {
-            throw new SubscriptionNotFoundException(id);
-        }
-        subscriptionRepository.deleteById(id);
+        AlertSubscription subscription = subscriptionRepository.findById(id)
+                .orElseThrow(() -> new SubscriptionNotFoundException(id));
+
+        String regionId = subscription.getRegionId();
+        subscriptionRepository.delete(subscription);
         log.info("Deleted subscription ID: {}", id);
+
+        subscriptionCacheService.evictRegion(regionId);
     }
 
     @Override
@@ -119,5 +133,11 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         subscriptions.forEach(sub -> sub.setActive(false));
         subscriptionRepository.saveAll(subscriptions);
         log.info("Deactivated {} subscription(s) for recipient: {}", subscriptions.size(), recipientAddress);
+
+        subscriptions.stream()
+                .map(AlertSubscription::getRegionId)
+                .filter(region -> region != null && !region.isBlank())
+                .distinct()
+                .forEach(subscriptionCacheService::evictRegion);
     }
 }

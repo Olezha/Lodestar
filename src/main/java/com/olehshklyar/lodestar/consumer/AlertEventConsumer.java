@@ -4,10 +4,10 @@ import com.olehshklyar.lodestar.config.KafkaTopicConfig;
 import com.olehshklyar.lodestar.dispatcher.NotificationDispatcher;
 import com.olehshklyar.lodestar.dto.AlertEvent;
 import com.olehshklyar.lodestar.dto.NotificationTask;
+import com.olehshklyar.lodestar.dto.SubscriptionResponse;
 import com.olehshklyar.lodestar.entity.AlertEventHistory;
-import com.olehshklyar.lodestar.entity.AlertSubscription;
 import com.olehshklyar.lodestar.repository.AlertEventHistoryRepository;
-import com.olehshklyar.lodestar.repository.AlertSubscriptionRepository;
+import com.olehshklyar.lodestar.service.SubscriptionCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -22,14 +22,14 @@ import java.util.UUID;
 
 /**
  * Consumer that listens to raw alert events from Kafka, persists them to the immutable history log,
- * matches events with active subscriptions, and dispatches delivery tasks to RabbitMQ.
+ * matches events with active subscriptions (cached via Redis), and dispatches delivery tasks to RabbitMQ.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class AlertEventConsumer {
 
-    private final AlertSubscriptionRepository subscriptionRepository;
+    private final SubscriptionCacheService subscriptionCacheService;
     private final AlertEventHistoryRepository historyRepository;
     private final NotificationDispatcher notificationDispatcher;
 
@@ -61,29 +61,29 @@ public class AlertEventConsumer {
         historyRepository.save(historyRecord);
         log.info("Archived AlertEvent [id={}] to append-only history log", event.eventId());
 
-        // 2. Query active subscribers for matching region
-        List<AlertSubscription> matchedSubscriptions = subscriptionRepository
-                .findByRegionIdAndActiveTrue(event.regionId());
+        // 2. Query active subscribers for matching region (Cache-Aside via Redis)
+        List<SubscriptionResponse> matchedSubscriptions = subscriptionCacheService
+                .getActiveSubscriptions(event.regionId());
 
         log.info("Matched {} active subscription(s) for region [{}]", matchedSubscriptions.size(), event.regionId());
 
         // 3. Filter by severity and dispatch notification tasks to RabbitMQ
-        for (AlertSubscription sub : matchedSubscriptions) {
-            if (!isSeveritySufficient(event.severity(), sub.getMinSeverity())) {
+        for (SubscriptionResponse sub : matchedSubscriptions) {
+            if (!isSeveritySufficient(event.severity(), sub.minSeverity())) {
                 log.debug("Skipping subscription [id={}] for user [{}]: event severity [{}] below minSeverity [{}]",
-                        sub.getId(), sub.getUserId(), event.severity(), sub.getMinSeverity());
+                        sub.id(), sub.userId(), event.severity(), sub.minSeverity());
                 continue;
             }
 
             log.info("Dispatching notification task for user [{}] via channel [{}]",
-                    sub.getUserId(), sub.getChannel());
+                    sub.userId(), sub.channel());
 
             NotificationTask task = new NotificationTask(
                     UUID.randomUUID().toString(),
                     event.eventId(),
-                    sub.getUserId(),
-                    sub.getChannel(),
-                    sub.getRecipientAddress(),
+                    sub.userId(),
+                    sub.channel(),
+                    sub.recipientAddress(),
                     event.regionId(),
                     String.format("Alert in %s: %s [%s]", event.regionId(), event.eventType(), event.severity()),
                     event.severity(),

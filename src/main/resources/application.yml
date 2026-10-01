@@ -70,6 +70,8 @@ spring:
           max-interval: 10000ms
 
 lodestar:
+  cache:
+    subscriptions-ttl: ${SUBSCRIPTIONS_CACHE_TTL:1h}
   discord:
     default-webhook-url: ${DISCORD_WEBHOOK_URL:}
     username: ${DISCORD_USERNAME:Lodestar Alerts}

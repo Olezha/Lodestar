@@ -32,6 +32,9 @@ class SubscriptionServiceTest {
     @Mock
     private AlertSubscriptionRepository subscriptionRepository;
 
+    @Mock
+    private SubscriptionCacheService subscriptionCacheService;
+
     @InjectMocks
     private SubscriptionServiceImpl subscriptionService;
 
@@ -52,7 +55,7 @@ class SubscriptionServiceTest {
     }
 
     @Test
-    @DisplayName("Should create and return subscription")
+    @DisplayName("Should create, return subscription, and evict region cache")
     void shouldCreateSubscription() {
         CreateSubscriptionRequest request = new CreateSubscriptionRequest(
                 "user-100",
@@ -76,6 +79,7 @@ class SubscriptionServiceTest {
         assertThat(response.regionId()).isEqualTo("KYIV_REGION");
         assertThat(response.minSeverity()).isEqualTo("WARNING");
         assertThat(response.active()).isTrue();
+        verify(subscriptionCacheService).evictRegion("KYIV_REGION");
     }
 
     @Test
@@ -100,7 +104,7 @@ class SubscriptionServiceTest {
     }
 
     @Test
-    @DisplayName("Should update subscription details")
+    @DisplayName("Should update subscription details and evict both old and new region caches")
     void shouldUpdateSubscription() {
         when(subscriptionRepository.findById(1L)).thenReturn(Optional.of(sampleSubscription));
         when(subscriptionRepository.save(any(AlertSubscription.class))).thenAnswer(i -> i.getArgument(0));
@@ -112,10 +116,23 @@ class SubscriptionServiceTest {
         assertThat(updated.regionId()).isEqualTo("LVIV_REGION");
         assertThat(updated.minSeverity()).isEqualTo("CRITICAL");
         assertThat(updated.active()).isFalse();
+        verify(subscriptionCacheService).evictRegion("KYIV_REGION");
+        verify(subscriptionCacheService).evictRegion("LVIV_REGION");
     }
 
     @Test
-    @DisplayName("Should deactivate subscriptions for specified recipient and channel")
+    @DisplayName("Should delete subscription and evict region cache")
+    void shouldDeleteSubscription() {
+        when(subscriptionRepository.findById(1L)).thenReturn(Optional.of(sampleSubscription));
+
+        subscriptionService.deleteSubscription(1L);
+
+        verify(subscriptionRepository).delete(sampleSubscription);
+        verify(subscriptionCacheService).evictRegion("KYIV_REGION");
+    }
+
+    @Test
+    @DisplayName("Should deactivate subscriptions for specified recipient and evict region caches")
     void shouldDeactivateSubscriptionsForRecipient() {
         when(subscriptionRepository.findByRecipientAddressAndChannel("https://discord.com/api/webhooks/100/token", NotificationChannel.DISCORD))
                 .thenReturn(List.of(sampleSubscription));
@@ -124,5 +141,6 @@ class SubscriptionServiceTest {
 
         assertThat(sampleSubscription.isActive()).isFalse();
         verify(subscriptionRepository).saveAll(List.of(sampleSubscription));
+        verify(subscriptionCacheService).evictRegion("KYIV_REGION");
     }
 }
