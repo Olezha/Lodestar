@@ -1,6 +1,9 @@
 spring:
   application:
     name: lodestar
+  config:
+    import:
+      - optional:file:.env[.properties]
 
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/lodestar_db}
@@ -89,7 +92,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,env,configprops
+  endpoint:
+    env:
+      show-values: ${ACTUATOR_SHOW_VALUES:NEVER}
+    configprops:
+      show-values: ${ACTUATOR_SHOW_VALUES:NEVER}
 
 logging:
   level:

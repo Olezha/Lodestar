@@ -157,7 +157,7 @@ Lodestar implements a decoupled, asynchronous notification pipeline that transfo
 * **Dynamic Multi-Channel Routing:** Automatic subscription matching by region and severity threshold.
 
 For detailed pipeline architecture, Mermaid flowcharts, configuration parameters, and step-by-step setup guides, see the dedicated documentation:
-👉 [**Notification Delivery Channels & Gateways (docs/notifications.md)**](docs/notifications.md)
+👉 [**Notification Delivery Channels & Gateways (docs/Notifications.md)**](docs/Notifications.md)
 
 ---
 
