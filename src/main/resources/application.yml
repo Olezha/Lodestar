@@ -72,6 +72,14 @@ spring:
 lodestar:
   cache:
     subscriptions-ttl: ${SUBSCRIPTIONS_CACHE_TTL:1h}
+  alert-source:
+    type: ${ALERT_SOURCE_TYPE:synthetic}
+    poll-interval: ${ALERTS_POLL_INTERVAL:15s}
+    debounce-ttl: ${ALERTS_DEBOUNCE_TTL:1h}
+    alerts-in-ua-base-url: ${ALERTS_IN_UA_BASE_URL:https://api.alerts.in.ua/v1}
+    alerts-in-ua-token: ${ALERTS_IN_UA_TOKEN:}
+    connect-timeout: ${ALERTS_CONNECT_TIMEOUT:5s}
+    read-timeout: ${ALERTS_READ_TIMEOUT:5s}
   analytics:
     window-duration: ${ANALYTICS_WINDOW_DURATION:5m}
     spike-threshold: ${ANALYTICS_SPIKE_THRESHOLD:3}

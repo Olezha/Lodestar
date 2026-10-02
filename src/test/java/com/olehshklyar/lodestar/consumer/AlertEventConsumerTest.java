@@ -74,6 +74,9 @@ class AlertEventConsumerTest {
     @Autowired
     private RabbitTemplate rabbitTemplate;
 
+    @Autowired
+    private com.olehshklyar.lodestar.service.SubscriptionCacheService subscriptionCacheService;
+
     @SpyBean
     private AlertSubscriptionRepository subscriptionRepository;
 
@@ -85,6 +88,7 @@ class AlertEventConsumerTest {
 
     @BeforeEach
     void setUp() {
+        subscriptionCacheService.evictAll();
         subscriptionRepository.deleteAll();
         historyRepository.deleteAll();
 

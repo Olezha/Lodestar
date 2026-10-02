@@ -4,36 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lodestar 🧭</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div class="logo">Lodestar 🧭</div>
-            <p class="tagline">Event Ingestion, Stream Processing & Notification Platform</p>
+    <main class="container">
+        <header style="text-align: center; margin-top: 2rem; margin-bottom: 2rem;">
+            <h1>Lodestar 🧭</h1>
+            <p>Event Ingestion, Stream Processing & Notification Platform</p>
         </header>
 
-        <section class="card">
-            <h3 class="card-title">🛠️ Engineering Endpoints & Documentation</h3>
-            <div class="links-grid">
-                <a class="link-card" href="/swagger-ui.html" target="_blank">
-                    <h4>Swagger UI ↗</h4>
-                    <p>Interactive OpenAPI documentation and REST endpoint testing console.</p>
+        <article>
+            <header>
+                <h2>Engineering Endpoints & Documentation</h2>
+            </header>
+            <div class="grid">
+                <a href="/swagger-ui.html" target="_blank" role="button" class="outline">
+                    <strong>Swagger UI ↗</strong><br>
+                    <small>Interactive OpenAPI console & REST endpoint testing.</small>
                 </a>
-                <a class="link-card" href="/actuator/health" target="_blank">
-                    <h4>Actuator Health ↗</h4>
-                    <p>Readiness & liveness probes, database, and broker connectivity checks.</p>
+                <a href="/actuator/health" target="_blank" role="button" class="outline">
+                    <strong>Actuator Health ↗</strong><br>
+                    <small>Readiness/liveness probes & broker connectivity.</small>
                 </a>
-                <a class="link-card" href="/v3/api-docs" target="_blank">
-                    <h4>OpenAPI Spec ↗</h4>
-                    <p>Raw OpenAPI 3.0 specification in JSON format.</p>
+                <a href="/v3/api-docs" target="_blank" role="button" class="outline">
+                    <strong>OpenAPI Spec ↗</strong><br>
+                    <small>Raw OpenAPI 3.0 specification in JSON format.</small>
                 </a>
             </div>
-        </section>
+        </article>
 
-        <footer>
-            Lodestar &bull; 2026 &bull; Spring Boot 3.3 &bull; Kafka &bull; RabbitMQ &bull; PostgreSQL
+        <footer style="text-align: center; margin-top: 3rem;">
+            <small>Lodestar &bull; 2026 &bull; Spring Boot 3.3 &bull; Kafka &bull; RabbitMQ &bull; PostgreSQL &bull; Redis</small>
         </footer>
-    </div>
+    </main>
 </body>
 </html>

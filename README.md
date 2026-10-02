@@ -157,7 +157,20 @@ Lodestar implements a decoupled, asynchronous notification pipeline that transfo
 * **Dynamic Multi-Channel Routing:** Automatic subscription matching by region and severity threshold.
 
 For detailed pipeline architecture, Mermaid flowcharts, configuration parameters, and step-by-step setup guides, see the dedicated documentation:
-👉 [**Notification Delivery Channels & Gateways (docs/Notifications.md)**](docs/Notifications.md)
+[Notification Delivery Channels & Gateways (docs/Notifications.md)](docs/Notifications.md)
+
+---
+
+## Alert Data Ingestion, Debouncing & Dynamic Region Management
+
+Lodestar supports dual ingestion modes: synthetic generator for development and live streaming from the Ukrainian Open Data API (`alerts.in.ua`).
+
+* **Dual Mode Client Delegation:** Seamlessly toggle between synthetic traffic generation and real-time open API polling via `ALERT_SOURCE_TYPE=live` or `synthetic`.
+* **Distributed Debounce Gate:** Redis-backed sliding TTL (`lodestar:alerts:debounce:<region>:<event_type>`) preventing duplicate alerts from flooding downstream Kafka pipelines.
+* **Relational Region Management & Unrecognized Location Discovery:** Relational mapping (`canonical_regions`, `region_mappings`, `unrecognized_locations`) with in-memory caching and interactive OpenAPI / Swagger UI console (`/swagger-ui.html`) for dynamic matching of new territorial communities (hromadas) without redeployments.
+
+For setup instructions, debouncing mechanics, API token provisioning, and Kubernetes scaling considerations, see:
+[Alert Sources & Dynamic Ingestion (docs/Alert_Sources.md)](docs/Alert_Sources.md)
 
 ---
 

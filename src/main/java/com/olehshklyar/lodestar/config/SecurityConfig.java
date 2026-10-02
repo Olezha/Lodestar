@@ -19,14 +19,14 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/",
                     "/index.html",
-                    "/css/**",
                     "/favicon.ico",
                     "/swagger-ui.html",
                     "/swagger-ui/**",
                     "/v3/api-docs/**",
                     "/actuator/**",
                     "/api/v1/subscriptions/**",
-                    "/api/v1/alerts/**"
+                    "/api/v1/alerts/**",
+                    "/api/v1/regions/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             );
