@@ -1,6 +1,8 @@
 spring:
   application:
     name: lodestar
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   config:
     import:
       - optional:file:.env[.properties]
@@ -93,9 +95,14 @@ lodestar:
     server-url: ${NTFY_SERVER_URL:https://ntfy.sh}
     default-topic: ${NTFY_DEFAULT_TOPIC:lodestar-alerts}
     dry-run: ${NTFY_DRY_RUN:true}
+  leader:
+    enabled: ${LEADER_ELECTION_ENABLED:true}
+    heartbeat-interval: ${LEADER_HEARTBEAT_INTERVAL:7000}
+    lease-ttl: ${LEADER_LEASE_TTL:20s}
 
 server:
   port: 8080
+  shutdown: graceful
 
 springdoc:
   api-docs:
@@ -109,6 +116,15 @@ management:
       exposure:
         include: health,info,metrics,prometheus,env,configprops
   endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: ${ACTUATOR_SHOW_DETAILS:when_authorized}
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState
     env:
       show-values: ${ACTUATOR_SHOW_VALUES:NEVER}
     configprops:

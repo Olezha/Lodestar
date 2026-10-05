@@ -36,6 +36,9 @@ class AlertIngestWorkerTest {
     @Mock
     private AlertDebounceService alertDebounceService;
 
+    @Mock
+    private com.olehshklyar.lodestar.service.LeaderElectionService leaderElectionService;
+
     private AlertSourceProperties properties;
     private AlertIngestWorker worker;
 
@@ -50,12 +53,13 @@ class AlertIngestWorkerTest {
                 Duration.ofSeconds(5),
                 Duration.ofHours(1)
         );
-        worker = new AlertIngestWorker(alertSourceClient, alertEventProducer, alertDebounceService, properties);
+        worker = new AlertIngestWorker(alertSourceClient, alertEventProducer, alertDebounceService, leaderElectionService, properties);
     }
 
     @Test
-    @DisplayName("Should publish alert event when debouncing allows it")
+    @DisplayName("Should publish alert event when debouncing allows it and instance is leader")
     void shouldPublishAlertWhenNotDebounced() {
+        when(leaderElectionService.isLeader()).thenReturn(true);
         AlertEvent event = new AlertEvent("ev-1", "KYIV_REGION", "AIR_RAID", "ACTIVE", "CRITICAL", Instant.now());
         when(alertSourceClient.fetchLatestEvents()).thenReturn(List.of(event));
         when(alertDebounceService.shouldPublish(event)).thenReturn(true);
@@ -68,12 +72,24 @@ class AlertIngestWorkerTest {
     @Test
     @DisplayName("Should skip publishing alert event when debounced as duplicate")
     void shouldSkipAlertWhenDebounced() {
+        when(leaderElectionService.isLeader()).thenReturn(true);
         AlertEvent event = new AlertEvent("ev-2", "LVIV_REGION", "AIR_RAID", "ACTIVE", "CRITICAL", Instant.now());
         when(alertSourceClient.fetchLatestEvents()).thenReturn(List.of(event));
         when(alertDebounceService.shouldPublish(event)).thenReturn(false);
 
         worker.pollAndPublishAlerts();
 
+        verify(alertEventProducer, never()).sendAlertEvent(any());
+    }
+
+    @Test
+    @DisplayName("Should skip polling external API completely when instance is in standby mode")
+    void shouldSkipPollingWhenInStandbyMode() {
+        when(leaderElectionService.isLeader()).thenReturn(false);
+
+        worker.pollAndPublishAlerts();
+
+        verify(alertSourceClient, never()).fetchLatestEvents();
         verify(alertEventProducer, never()).sendAlertEvent(any());
     }
 

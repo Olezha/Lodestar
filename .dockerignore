@@ -1,0 +1,8 @@
+.git
+.gradle
+.idea
+build
+!build/libs/lodestar-0.0.1-SNAPSHOT.jar
+*.md
+docs
+k8s

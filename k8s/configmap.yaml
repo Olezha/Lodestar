@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lodestar-config
+  labels:
+    app: lodestar
+data:
+  SPRING_APPLICATION_NAME: "lodestar"
+  DB_URL: "jdbc:postgresql://lodestar-postgres:5432/lodestar_db"
+  REDIS_HOST: "lodestar-redis"
+  REDIS_PORT: "6379"
+  KAFKA_BOOTSTRAP_SERVERS: "lodestar-kafka:29092"
+  RABBITMQ_HOST: "lodestar-rabbitmq"
+  RABBITMQ_PORT: "5672"
+  ALERT_SOURCE_TYPE: "synthetic"
+  ALERTS_POLL_INTERVAL: "15s"
+  ALERTS_DEBOUNCE_TTL: "1h"
+  ANALYTICS_ENABLED: "true"
+  DISCORD_DRY_RUN: "true"
+  NTFY_DRY_RUN: "true"
+  LEADER_ELECTION_ENABLED: "true"
+  LEADER_HEARTBEAT_INTERVAL: "7000"
+  LEADER_LEASE_TTL: "20s"

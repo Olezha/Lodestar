@@ -12,6 +12,8 @@ import org.springframework.scheduling.annotation.SchedulingConfigurer;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 import org.springframework.stereotype.Component;
 
+import com.olehshklyar.lodestar.service.LeaderElectionService;
+
 import java.util.List;
 
 @Slf4j
@@ -23,6 +25,7 @@ public class AlertIngestWorker implements SchedulingConfigurer {
     private final AlertSourceClient alertSourceClient;
     private final AlertEventProducer alertEventProducer;
     private final AlertDebounceService alertDebounceService;
+    private final LeaderElectionService leaderElectionService;
     private final AlertSourceProperties properties;
 
     @Override
@@ -32,7 +35,14 @@ public class AlertIngestWorker implements SchedulingConfigurer {
     }
 
     public void pollAndPublishAlerts() {
-        log.debug("Polling external alert source...");
+        if (!leaderElectionService.isLeader()) {
+            log.debug("Instance [{}] is in STANDBY mode. Skipping scheduled alert polling.",
+                    leaderElectionService.getInstanceId());
+            return;
+        }
+
+        log.debug("Instance [{}] polling external alert source as active LEADER...",
+                leaderElectionService.getInstanceId());
         List<AlertEvent> events = alertSourceClient.fetchLatestEvents();
 
         for (AlertEvent event : events) {

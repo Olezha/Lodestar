@@ -218,3 +218,137 @@ To provide empirical validation for dissertation research and demonstrate deep s
 
 ### Benchmark Setup & Empirical Validation
 Using `k6` to inject synthetic traffic against the custom balancer, collecting P95 and P99 latency percentiles and upstream request distribution graphs under asymmetric backend load conditions to validate theoretical bounds against empirical measurements.
+
+---
+
+## 8. Step-by-Step Operator Runbook (CLI Reference)
+
+This runbook outlines the exact sequence of commands required to provision, deploy, update, monitor, and teardown the Lodestar cluster environment.
+
+### 8.1. Prerequisites & Required Tools
+Install the following lightweight binaries into `~/.local/bin` (no root privileges required):
+* `kubectl` (Kubernetes command-line interface)
+* `k3d` (Docker-based lightweight Kubernetes cluster manager)
+* `k9s` (Terminal UI for cluster inspection and troubleshooting)
+* `k6` (Load and performance testing tool)
+
+Ensure `~/.local/bin` is exported in your `PATH`:
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+### 8.2. Initial Cluster Provisioning (From Scratch)
+1. **Start Stateful Data & Messaging Infrastructure (Docker Compose):**
+   ```bash
+   cd /home/oleh/workspace/lodestar
+   docker compose up -d
+   ```
+2. **Create Multi-Node k3d Cluster on the Compose Bridge Network:**
+   ```bash
+   k3d cluster create lodestar-cluster \
+     --servers 1 --agents 2 \
+     --port "8080:80@loadbalancer" \
+     --network lodestar_default
+   ```
+   *Note:* Attaching `--network lodestar_default` bridges the Kubernetes pods directly to the Docker Compose DNS resolver (`lodestar-kafka:29092`, `lodestar-postgres:5432`, `lodestar-redis:6379`, `lodestar-rabbitmq:5672`), completely resolving the Kafka Advertised Listeners loopback issue.
+
+3. **Build Application Artifact & Container Image:**
+   ```bash
+   ./gradlew bootJar
+   docker build -t lodestar:latest .
+   ```
+
+4. **Import Container Image into k3d Nodes (Eliminates External Registry Push):**
+   ```bash
+   k3d image import lodestar:latest -c lodestar-cluster
+   ```
+
+5. **Apply Kubernetes Manifests:**
+   ```bash
+   kubectl apply -f k8s/configmap.yaml
+   kubectl apply -f k8s/secret.yaml
+   kubectl apply -f k8s/deployment.yaml
+   kubectl apply -f k8s/service.yaml
+   kubectl apply -f k8s/ingress.yaml
+   kubectl apply -f k8s/hpa.yaml
+   ```
+
+6. **Verify Cluster Readiness:**
+   ```bash
+   kubectl get nodes -o wide
+   kubectl get pods -o wide
+   kubectl rollout status deployment/lodestar
+   ```
+
+### 8.3. Daily Inner Development Loop (Re-deploying Code Changes)
+When code in `lodestar` is modified, execute this fast zero-downtime redeployment pipeline:
+```bash
+# 1. Compile updated Spring Boot jar
+./gradlew bootJar -x test
+
+# 2. Build multi-stage container image
+docker build -t lodestar:latest .
+
+# 3. Import updated image into k3d
+k3d image import lodestar:latest -c lodestar-cluster
+
+# 4. Trigger rolling restart
+kubectl rollout restart deployment/lodestar
+
+# 5. Monitor rolling update status
+kubectl rollout status deployment/lodestar
+```
+
+### 8.4. Routine Environment Operations (Start, Stop, Restart)
+* **Pause Environment (Free Memory & CPU):**
+  ```bash
+  k3d cluster stop lodestar-cluster
+  docker compose stop
+  ```
+* **Resume Environment:**
+  ```bash
+  docker compose up -d
+  k3d cluster start lodestar-cluster
+  kubectl get pods -o wide
+  ```
+* **Interactive Live Monitoring:**
+  ```bash
+  k9s
+  ```
+* **Complete Teardown (Clean Purge):**
+  ```bash
+  k3d cluster delete lodestar-cluster
+  docker compose down -v
+  ```
+
+---
+
+## 9. Empirical Validation & Stress Test Metrics
+
+### 9.1. HPA Spike Stress Test (`k6`)
+Executed under high concurrency spike profile using `tests/load/k6-spike-test.js`:
+* **Concurreny:** 150 concurrent Virtual Users (VUs)
+* **Duration:** 75 seconds
+* **Total HTTP Requests Executed:** 24,202 requests
+* **HTTP Failure Rate:** **0.00% (0 errors out of 24,202 checks)**
+* **HTTP 502 / Connection Resets:** **Zero (0)**
+* **HPA Dynamics:** Automatically scaled the deployment from 1 replica to 5 replicas under 299% peak CPU load, and gracefully scaled down back to 1 replica post cool-down.
+
+### 9.2. Comparative L7 Balancer Benchmark (Project Loom Virtual Threads)
+Benchmarked 30 concurrent VUs over 15-second sustained intervals across 3 cluster worker nodes (`172.18.0.6`, `172.18.0.7`, `172.18.0.8`):
+
+| Metric | Round Robin (RR) | Least Connections (LC) | Power of Two Choices (P2C) |
+| :--- | :--- | :--- | :--- |
+| **Throughput (RPS)** | 325.2 req/s (4,906 reqs) | 375.4 req/s (5,655 reqs) | **563.9 req/s (8,479 reqs)** *(+73%)* |
+| **Minimum Latency** | 42.8 ms | 43.1 ms | **1.7 ms** |
+| **Average Latency** | 91.9 ms | 79.6 ms | **52.9 ms** |
+| **Median (P50)** | 95.5 ms | 87.5 ms | **47.8 ms** |
+| **P90 Latency** | 151.3 ms | 104.6 ms | **79.7 ms** |
+| **P95 Latency** | 195.8 ms | 111.7 ms | **95.6 ms** |
+| **P99 Latency** | 207.9 ms | 195.8 ms | **108.0 ms** |
+| **Max Latency** | 307.6 ms | 307.7 ms | **203.7 ms** |
+| **Error Rate** | 0.00% | 0.00% | **0.00%** |
+
+**Empirical Conclusion:**  
+Mitzenmacher's Power of Two Choices ($d=2$) delivered a **73% throughput gain** and cut **P95 latency by more than half** compared to Round Robin. By sampling two random candidates independently, P2C achieved exponential queue bound minimization without suffering the centralized lock and contention overhead ($\sigma$) inherent in global Least Connections tracking under high concurrency.
+
