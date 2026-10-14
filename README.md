@@ -75,12 +75,12 @@ were selected together in this system, read the engineering article:
 [RabbitMQ & Kafka: Historical Evolution & Architectural Choices (in Ukrainian)](https://olehshklyar.com/2609-rabbitmq-and-kafka)
 
 ### Tech Stack:
-* **Language & Runtime:** Java 21, Spring Boot 3.3+ (Spring Data JPA, Spring Security, Spring Web, RestClient)
+* **Language & Runtime:** Java 21, Spring Boot 3.3+ (Spring Data JPA, Spring Security OAuth2 Resource Server / JWT, Spring Web, RestClient)
 * **Event Streaming:** Apache Kafka (KRaft mode, spring-kafka)
 * **Message Queue:** RabbitMQ (spring-amqp, AMQP 0-9-1, DLX & Retry Exchanges)
 * **Persistence & Caching:** PostgreSQL 16, Flyway 10, Redis 7
-* **Orchestration & Cloud:** Docker, Kubernetes (Deployments, Services, Ingress, HPA), Helm
-* **Observability:** Prometheus, Grafana, Spring Boot Actuator, Micrometer Observation API
+* **Orchestration & Cloud:** Docker, Kubernetes (Deployments, Services, Ingress, HPA) on a local `k3d` cluster
+* **Observability:** Spring Boot Actuator (health groups for Kubernetes probes, Micrometer `/actuator/metrics`)
 * **Testing:** Testcontainers (Kafka, RabbitMQ, PostgreSQL), JUnit 5, AssertJ
 
 ---
@@ -145,6 +145,12 @@ were selected together in this system, read the engineering article:
 * **PostgreSQL:** `localhost:5432` (db: `lodestar_db`, user: `postgres`)
 * **Redis:** `localhost:6379`
 * **Apache Kafka (KRaft):** `localhost:9092`
+
+### Security Profiles
+* **Default (dev):** all endpoints, Swagger UI and Actuator are open for local development and k6 load tests.
+* **`prod`** (`SPRING_PROFILES_ACTIVE=prod`): stateless JWT (HS256) authorization with per-endpoint scopes,
+  Swagger UI / OpenAPI disabled, Actuator limited to `health` and `info`. Requires `JWT_SECRET` (>= 32 bytes).
+  See [docs/Security.md](docs/Security.md).
 
 ---
 

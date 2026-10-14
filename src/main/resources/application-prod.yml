@@ -1,0 +1,18 @@
+# Production profile: activated with SPRING_PROFILES_ACTIVE=prod
+# Business endpoints require a JWT (see docs/Security.md); OpenAPI/Swagger UI are disabled
+# and Actuator exposes only the endpoints needed by Kubernetes probes.
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

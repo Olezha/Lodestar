@@ -99,9 +99,13 @@ lodestar:
     enabled: ${LEADER_ELECTION_ENABLED:true}
     heartbeat-interval: ${LEADER_HEARTBEAT_INTERVAL:7000}
     lease-ttl: ${LEADER_LEASE_TTL:20s}
+  security:
+    jwt:
+      secret: ${JWT_SECRET:} # HMAC-SHA256 key (>= 32 bytes); required only in the 'prod' profile
+      issuer: ${JWT_ISSUER:lodestar}
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
   shutdown: graceful
 
 springdoc:
