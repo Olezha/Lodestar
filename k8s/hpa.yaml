@@ -9,7 +9,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: lodestar
-  minReplicas: 1
+  minReplicas: 2   # one spare replica: survives a node failure, a pod eviction and the PodDisruptionBudget (k8s/pdb.yaml)
   maxReplicas: 5
   metrics:
   - type: Resource

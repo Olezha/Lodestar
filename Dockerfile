@@ -5,7 +5,7 @@ ARG JAR_FILE=build/libs/lodestar-0.0.1-SNAPSHOT.jar
 COPY ${JAR_FILE} application.jar
 RUN java -Djarmode=tools -jar application.jar extract --layers --launcher --destination extracted
 
-# Stage 2: Minimalist Alpine JRE 21 Runtime (<150 MB)
+# Stage 2: Alpine JRE 21 runtime (JRE base + application layers)
 FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app
 
@@ -19,8 +19,9 @@ COPY --from=extractor --chown=spring:spring /workspace/extracted/spring-boot-loa
 COPY --from=extractor --chown=spring:spring /workspace/extracted/snapshot-dependencies/ ./
 COPY --from=extractor --chown=spring:spring /workspace/extracted/application/ ./
 
-# JVM Container awareness & cgroups v2 dynamic sizing
-ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+# Heap sized from the cgroup memory limit, leaving ~40% for Metaspace, Code Cache, thread stacks and buffers.
+# GC is set explicitly: with a 1 CPU limit JVM ergonomics would silently fall back to SerialGC.
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=60.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"
 
 EXPOSE 8080
 

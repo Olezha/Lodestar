@@ -6,30 +6,87 @@ This document describes the production-grade containerization, multi-node Kubern
 
 ## 1. Local Cluster Topology (`k3d`)
 
-To achieve complete parity with cloud Kubernetes environments (AWS EKS, GCP GKE) without incurring cloud infrastructure costs or excessive local overhead, Lodestar deploys to a local **`k3d`** cluster (lightweight **k3s** running inside Docker).
+To achieve parity with cloud Kubernetes environments (AWS EKS, GCP GKE) without cloud infrastructure costs, Lodestar deploys to a local **`k3d`** cluster: **k3s** (a single-binary Kubernetes distribution) where every node runs as a Docker container.
 
-### Cluster Specifications
-* **Control Plane (Server Node):** `k3d-lodestar-server-0`  
-  Runs Kubernetes control plane components: `kube-apiserver`, `kube-scheduler`, and `kube-controller-manager`.
-* **Worker Nodes (Agent Nodes):** `k3d-lodestar-agent-0`, `k3d-lodestar-agent-1`  
-  Dedicated nodes hosting container runtimes, `kubelet`, and `kube-proxy` where application pods execute.
-* **Footprint:** The entire multi-node cluster consumes **~500–600 MB of RAM**, allowing full multi-node scheduling and network testing directly on a developer workstation.
+### 1.1. Cluster Specifications
+* **Control Plane (Server Node):** `k3d-lodestar-cluster-server-0`  
+  A single `k3s server` process hosts `kube-apiserver`, `kube-scheduler` and `kube-controller-manager`, plus the node components (`kubelet`, `kube-proxy`, `containerd`). k3s does not taint the server node, so application pods may be scheduled on it as well.
+* **Cluster State Store:** with a single server and no `--cluster-init`, k3s persists cluster state in **SQLite** via **kine** (an etcd API shim): `/var/lib/rancher/k3s/server/db/state.db`. Embedded etcd is used only for multi-server HA setups.
+* **Worker Nodes (Agent Nodes):** `k3d-lodestar-cluster-agent-0`, `k3d-lodestar-cluster-agent-1`  
+  A `k3s agent` process (`kubelet`, `kube-proxy` in iptables mode, Flannel VXLAN) plus its own `containerd` holding the pod containers.
+* **k3d Load Balancer:** `k3d-lodestar-cluster-serverlb` (nginx) publishes host port `8080` to port `80` of every node and proxies the API Server (`6443`) to a random host port written into `~/.kube/config`.
+* **Built-in k3s Add-ons (`kube-system`):** CoreDNS, Traefik (Ingress Controller), ServiceLB (`svclb-traefik` pods on every node), metrics-server (CPU/RAM metrics for HPA), local-path-provisioner.
+* **Footprint:** the empty cluster (system pods only) uses **~1.2 GB of RAM** (`docker stats`: server ~0.9 GB, agents ~0.1 GB each, load balancer ~30 MB); each Lodestar replica adds up to its 1 GiB memory limit.
 
-```
-                           +-------------------------------------+
-                           |      k3d Ingress Load Balancer      |
-                           |           (:8080 -> :80)            |
-                           +------------------+------------------+
-                                              |
-                     +------------------------+------------------------+
-                     |                                                 |
-       +-------------v--------------+                    +-------------v--------------+
-       |   Worker Node 1 (Agent 0)  |                    |   Worker Node 2 (Agent 1)  |
-       |  +----------------------+  |                    |  +----------------------+  |
-       |  | Lodestar Pod (Rep 1) |  |                    |  | Lodestar Pod (Rep 2) |  |
-       |  +----------------------+  |                    |  +----------------------+  |
-       |  kube-proxy (iptables)     |                    |  kube-proxy (iptables)     |
-       +----------------------------+                    +----------------------------+
+### 1.2. Network Address Spaces
+| Range | Owner | Contents |
+|---|---|---|
+| `172.18.0.0/16` | Docker bridge `lodestar_default` | k3d node containers and Docker Compose data services |
+| `10.42.0.0/16` | k3s pod network (Flannel VXLAN) | Pod IPs; each node receives a `/24` (`podCIDR`) |
+| `10.43.0.0/16` | k3s service network | Virtual `ClusterIP` addresses, implemented only as `kube-proxy` iptables rules |
+
+### 1.3. Kubernetes Resources (`k8s/`)
+| Manifest | Resource | Key settings |
+|---|---|---|
+| `configmap.yaml` | ConfigMap `lodestar-config` | Data tier endpoints by Compose container name, alert source, leader election |
+| `secret.yaml` | Secret `lodestar-secret` | Database and RabbitMQ credentials, alert API token |
+| `deployment.yaml` | Deployment `lodestar` | no `replicas` field (owned by the HPA), topology spread across nodes, `RollingUpdate` (`maxSurge: 1`, `maxUnavailable: 0`), probes, `preStop`, resources (section 3) |
+| `service.yaml` | Service `lodestar-service` | `ClusterIP`, port `8080` |
+| `ingress.yaml` | Ingress `lodestar-ingress` | Traefik entrypoint `web`, path `/` (Prefix) to `lodestar-service:8080` |
+| `hpa.yaml` | HorizontalPodAutoscaler `lodestar-hpa` | 2–5 replicas, CPU 60% (section 5) |
+| `pdb.yaml` | PodDisruptionBudget `lodestar-pdb` | `minAvailable: 1` during voluntary disruptions (node drain, cluster upgrade) |
+
+### 1.4. Topology & Request Flow
+```mermaid
+flowchart TD
+    subgraph Host["1. Host Machine"]
+        Client["Browser / k6 (localhost:8080)"]
+        Kubectl["kubectl (~/.kube/config)"]
+    end
+
+    subgraph Edge["2. k3d Load Balancer"]
+        ServerLB["k3d-lodestar-cluster-serverlb (nginx)"]
+    end
+
+    subgraph ControlPlane["3. Control Plane: server-0 (k3s server)"]
+        API["API Server · Scheduler · Controller Manager"]
+        Store[("kine + SQLite: state.db")]
+    end
+
+    subgraph DataPlane["4. Data Plane: server-0, agent-0, agent-1"]
+        NodeAgents["kubelet · kube-proxy (iptables) · containerd"]
+        SvcLB["svclb-traefik (hostPort 80 on every node)"]
+        Traefik["Traefik Ingress Controller"]
+        Service["Service: lodestar-service (ClusterIP)"]
+        Pods["Lodestar Pods (Deployment, HPA 2–5)"]
+    end
+
+    subgraph DataTier["5. Stateful Data Tier (Docker Compose, lodestar_default)"]
+        Postgres[("PostgreSQL 16")]
+        Redis[("Redis 7")]
+        Kafka@{ shape: h-cyl, label: "Kafka (PLAINTEXT kafka:29092)" }
+        RabbitMQ@{ shape: h-cyl, label: "RabbitMQ" }
+    end
+
+    %% Ingress Flow
+    Client -->|HTTP :8080| ServerLB
+    ServerLB -->|:80 on any node| SvcLB
+    SvcLB -->|DNAT to traefik Service| Traefik
+    Traefik -->|Ingress rule: path /| Service
+    Service -->|kube-proxy DNAT to Pod IP| Pods
+
+    %% Control Flow
+    Kubectl -->|HTTPS :6443| ServerLB
+    ServerLB -->|Proxy API requests| API
+    API -->|Persist desired state| Store
+    NodeAgents -.->|Watch assigned Pods, report status| API
+    NodeAgents -.->|Run containers| Pods
+
+    %% Data Flow
+    Pods -->|lodestar-postgres:5432| Postgres
+    Pods -->|lodestar-redis:6379| Redis
+    Pods -->|lodestar-kafka:29092| Kafka
+    Pods -->|lodestar-rabbitmq:5672| RabbitMQ
 ```
 
 ---
@@ -39,21 +96,28 @@ To achieve complete parity with cloud Kubernetes environments (AWS EKS, GCP GKE)
 ### 2.1. Symmetric Stateless Service Replicas
 Lodestar follows 12-Factor App design principles. All application replicas deployed via Kubernetes `Deployment` are **symmetric and stateless**:
 * Every pod can service incoming REST API requests (`/api/v1/*`).
-* Every pod executes consumer group listeners for Kafka topics (`lodestar-analytics-group`, `lodestar-anomaly-group`) and RabbitMQ queues with automatic partition balancing.
+* Every pod runs Kafka listeners in three consumer groups (`lodestar-group` for alert archiving and subscriber matching, `lodestar-analytics-group` for stream analysis, `lodestar-anomaly-group` for anomaly events) and RabbitMQ consumers for the notification queues; Kafka rebalances topic partitions across replicas automatically.
 * Scaling the deployment (e.g., from 1 to 5 pods) creates identical, interchangeable instances without master/worker code divergence.
 
 ### 2.2. Distributed Ingestion: The Redis-Backed Leader Election Pattern
 While REST and messaging workloads scale horizontally, polling external rate-limited APIs (such as `alerts.in.ua`) requires strict singleton execution:
 * **The Problem:** If 5 horizontally scaled pods each poll an external API every 15 seconds, the effective request rate multiplies to once every 3 seconds, triggering immediate `HTTP 429 Too Many Requests` and API token suspension.
 * **The Architecture:** Lodestar uses **Redis-Backed Leader Election**:
-  * An elected leader lock (`lodestar:leader:alert-ingest`) is acquired using an atomic Redis `SETNX` lease with a rolling heartbeat TTL.
+  * An elected leader lock (`lodestar:leader:alert-ingest`) is acquired using an atomic Redis `SETNX` lease (TTL 20s) renewed by a heartbeat every 7s; the instance ID is the pod name (`HOSTNAME` from the Downward API).
   * Only the active leader pod executes `AlertIngestWorker`.
   * Non-leader replicas remain in hot standby for ingestion while continuing to process incoming HTTP requests and messaging streams.
   * If the leader pod terminates, an active standby replica acquires the lease on the subsequent cycle, ensuring continuous ingestion without duplicate external requests.
 
 ### 2.3. Infrastructure Placement Strategy
 * **Data & Messaging Tier (PostgreSQL, Kafka, RabbitMQ, Redis):**  
-  To optimize memory footprint and avoid running heavy Kubernetes Operators locally, the stateful infrastructure runs in Docker Compose on the host machine. Pods inside the `k3d` cluster reach these services via `host.k3d.internal` (mirrored in Kubernetes manifests via `ExternalName` or host alias configurations). In cloud enterprise environments, this reflects standard industry practice: hosting data tiers on cloud managed services (AWS RDS, AWS MSK) while running stateless compute in Kubernetes.
+  To optimize memory footprint and avoid running Kubernetes Operators locally, the stateful infrastructure runs in Docker Compose. Kubernetes does not manage or health-check these services; Docker healthchecks do. In cloud environments this mirrors standard practice: data tiers on managed services (AWS RDS, MSK, ElastiCache) while stateless compute runs in Kubernetes.
+
+### 2.4. Network Bridge to the Data Tier
+The cluster is created with `--network lodestar_default`, so every k3d node joins the Docker Compose bridge network:
+* **Name resolution from pods:** pods query CoreDNS (`kube-dns`, `10.43.0.10`). Compose container names (`lodestar-postgres`, `lodestar-kafka`, ...) are served from the `NodeHosts` entries that k3d injects into the `coredns` ConfigMap at cluster creation; any other name (e.g. the Compose service alias `kafka`) is forwarded to the node resolver `172.18.0.1`, which k3d redirects to Docker's embedded DNS.
+* **Kafka advertised listeners:** the broker exposes two listeners. `PLAINTEXT` (`:29092`) advertises `kafka:29092`, resolvable inside the Docker network; `PLAINTEXT_HOST` (`:9092`) advertises `localhost:9092` for applications on the host. Kafka clients use the bootstrap address only to fetch metadata and then connect to the advertised address of each partition leader, so pods must use `lodestar-kafka:29092`; through `:9092` they would connect to their own loopback and fail with `Connection refused`.
+* **Source address:** traffic leaving the pod network is masqueraded to the node IP (`172.18.0.x`), so the data tier sees node addresses, not pod IPs.
+* **Ordering:** Docker Compose must create `lodestar_default` before `k3d cluster create`; a network created by k3d lacks Compose labels and `docker compose up` refuses to reuse it.
 
 ---
 
@@ -61,22 +125,26 @@ While REST and messaging workloads scale horizontally, polling external rate-lim
 
 ### 3.1. Multi-Stage Layered Dockerfile
 Spring Boot 3.3 layered jars are leveraged to minimize container build times and registry transfer bandwidth:
-1. **Extractor Stage:** Runs `java -Djarmode=layertools -jar application.jar extract` to split the artifact into distinct semantic layers:
+1. **Extractor Stage:** Runs `java -Djarmode=tools -jar application.jar extract --layers --launcher` to split the artifact into distinct semantic layers:
    * `dependencies/` (third-party libraries, cached long-term)
    * `spring-boot-loader/`
    * `snapshot-dependencies/`
    * `application/` (application classes and resources, updated frequently)
-2. **Runtime Stage:** Built upon `eclipse-temurin:21-jre-alpine` (total final image footprint < 150 MB). Runs under a dedicated non-root user (`USER spring:spring`).
+2. **Runtime Stage:** Built upon `eclipse-temurin:21-jre-alpine` (final image ~300 MB: JRE base plus application dependencies). Runs under a dedicated non-root user (`USER spring:spring`).
 
 ### 3.2. Cgroups v2 & Container Memory Awareness
-Hardcoding `-Xmx` inside a container is an anti-pattern. Instead, dynamic percentage-based allocation tuned for cgroups v2 ensures reliable operation:
+Hardcoding `-Xmx` inside a container is an anti-pattern. Instead, heap size is derived from the cgroup memory limit:
 ```bash
-JAVA_OPTS="-XX:+UseContainerSupport \
-           -XX:MaxRAMPercentage=75.0 \
+JAVA_OPTS="-XX:MaxRAMPercentage=60.0 \
+           -XX:+UseG1GC \
            -XX:+ExitOnOutOfMemoryError"
 ```
-* **Heap Boundary:** Allocates 75% of the container's memory limit to the JVM heap.
-* **Non-Heap Safety Margin:** Leaves 25% unallocated for Metaspace, thread stacks (1 MB per platform thread / off-heap structures for Virtual Threads), Netty direct buffers, and GC tracking. This prevents OS kernel OOM killing (`Exit Code 137`).
+* **Container awareness:** `-XX:+UseContainerSupport` is enabled by default since JDK 10, so it is not set explicitly; the JVM reads `memory.max` / `cpu.max` from cgroups v2.
+* **Heap Boundary:** 60% of the container memory limit (~614 MiB of 1 GiB).
+* **Non-Heap Budget:** the remaining ~410 MiB covers Metaspace, Code Cache, thread stacks, GC structures and direct buffers. `limits.memory` caps the whole process (RSS), not just the heap; exceeding it gets the process killed by the kernel (`OOMKilled`, Exit Code 137) without an `OutOfMemoryError`.
+* **Explicit GC:** JVM ergonomics selects G1 only on "server-class" machines (>= 2 CPUs and >= 1792 MB). With `limits.cpu: 1000m` the JVM sees one CPU and would silently fall back to SerialGC, so G1 is set explicitly.
+* **Fail fast:** `-XX:+ExitOnOutOfMemoryError` terminates the JVM on a Java-level OOM so the kubelet restarts the container instead of leaving it half-alive.
+* **Pod resources:** `requests.memory` = `limits.memory` = 1 GiB. Memory is not compressible: with `requests < limits` the scheduler may overcommit a node, and under node memory pressure Burstable pods above their request are the first candidates for eviction or OOM kill.
 
 ---
 
@@ -93,8 +161,8 @@ Spring Boot Actuator health groups are mapped to Kubernetes probes:
 
 ### 4.2. Graceful Shutdown & The `preStop` Race Condition
 When Kubernetes terminates a pod during a deployment rollout or scale-down event, two actions happen asynchronously in parallel:
-1. Kubelet sends a `SIGTERM` signal to the container process.
-2. The endpoint controller removes the pod IP from the `Endpoints` resource and propagates the update to `kube-proxy` across all worker nodes.
+1. Kubelet runs the `preStop` hook and then sends `SIGTERM` to the container process.
+2. The EndpointSlice controller removes the pod IP from the Service endpoints; `kube-proxy` on every node and Traefik then update their routing.
 
 **The Race Condition:** Propagating network rule updates (`iptables` / `IPVS`) across the cluster takes 1 to 4 seconds. If the application terminates immediately upon receiving `SIGTERM`, in-flight requests and new connections routed during this window fail with `502 Bad Gateway` or `Connection Reset by Peer`.
 
@@ -108,22 +176,34 @@ lifecycle:
 * The `preStop` hook delays the `SIGTERM` delivery by 10 seconds.
 * `kube-proxy` completes route removal across all nodes while the pod continues accepting and finishing active traffic.
 * Spring Boot's graceful shutdown (`server.shutdown=graceful` with a 30s phase timeout) then drains remaining requests cleanly before process termination (`Exit Code 143`).
+* **Termination budget:** `preStop` (10s) + graceful shutdown (up to 30s) = 40s, within `terminationGracePeriodSeconds: 45`; past that deadline the kubelet sends `SIGKILL`.
+* The JVM receives `SIGTERM` directly because the image `ENTRYPOINT` uses `exec`, making `java` PID 1 instead of `sh`.
 
 ---
 
 ## 5. Horizontal Pod Autoscaling (HPA) & Load Injection
 
 ### 5.1. Autoscaler Configuration
-An HPA resource targets the Lodestar deployment:
-* **Minimum Replicas:** 1
-* **Maximum Replicas:** 5
-* **Metric:** Target CPU utilization of 60%
+An HPA resource (`autoscaling/v2`) targets the Lodestar deployment:
+* **Replicas:** 2–5. A floor of two replicas keeps the service available when a node fails or a pod is evicted: with a single replica, a lost node means downtime until the pod is recreated elsewhere, which by default takes up to 5 minutes (`node.kubernetes.io/unreachable` toleration of 300s).
+* **Placement:** `topologySpreadConstraints` (`maxSkew: 1` on `kubernetes.io/hostname`, `ScheduleAnyway`) spreads replicas across nodes, so two replicas do not share a single point of failure; `ScheduleAnyway` keeps scheduling possible if a node is unavailable.
+* **Voluntary disruptions:** `lodestar-pdb` (`minAvailable: 1`) makes `kubectl drain` and cluster upgrades evict replicas one at a time, never all at once. It does not protect against involuntary failures (node crash, OOMKilled).
+* **Metric:** average CPU utilization of 60%, measured against `requests.cpu` (250m), not the limit.
+* **Scale-up:** no stabilization window; up to +100% replicas every 15s.
+* **Scale-down:** 300s stabilization window; up to −50% replicas every 60s.
+* CPU metrics come from metrics-server (bundled with k3s).
+* **Replica ownership:** `deployment.yaml` deliberately omits `spec.replicas`. If the manifest set it, every `kubectl apply` would reset the replica count and override the HPA until its next scale-down window.
+* **Migrating an existing Deployment:** `kubectl apply` compares the manifest with the `kubectl.kubernetes.io/last-applied-configuration` annotation; removing a field that is still in the annotation deletes it from the object, and the API Server defaults `replicas` to 1. Update the annotation first, then apply:
+  ```bash
+  kubectl apply set-last-applied -f k8s/deployment.yaml
+  kubectl apply -f k8s/deployment.yaml
+  ```
 
 ### 5.2. Multi-Channel Load Injection
 1. **Synthetic Background Event Ingestion:**  
-   The built-in synthetic alert generator streams continuous batches of simulated alert events into the Kafka `events.raw-alerts` topic.
+   With `ALERT_SOURCE_TYPE=synthetic`, the leader replica generates simulated alert events into the Kafka `events.raw-alerts` topic.
 2. **HTTP Stress Traffic (k6):**  
-   A dedicated `k6` script executes a spike profile ramping from 10 to 200 virtual users in 30 seconds against Lodestar's Ingress REST endpoints (`/api/v1/subscriptions`, `/api/v1/regions/unrecognized`), inducing CPU load to trigger automatic HPA expansion.
+   `tests/load/k6-spike-test.js` runs a spike profile against the Ingress (`BASE_URL`, default `http://localhost:8080`): 10s warm-up to 10 VUs, 20s ramp to 150 VUs, 30s sustained at 150 VUs, 15s cool-down. Each iteration calls `/api/v1/regions/unrecognized` and `/actuator/health/readiness`; threshold `p(95) < 500ms`.
 
 ---
 
@@ -140,25 +220,53 @@ In modern cloud architectures, load balancing is not an isolated component opera
 6. **Compute & Orchestration Scheduling Tier:** Cluster schedulers (`kube-scheduler`, HPA, CloudSim VM placement). Balances workload placement across physical worker nodes according to multi-dimensional resource vectors (CPU, RAM, topology spread constraints), optimizing multi-objective cost/performance functions ($E = \sum w_i M_i$).
 7. **Asynchronous Messaging & Queue Tier:** Partition assignments in Apache Kafka (`CooperativeStickyAssignor`) and task dispatching across competing consumers in RabbitMQ (`basic.qos` / `prefetch_count`).
 
-```
-                     END-TO-END LOAD BALANCING CASCADE
-  [ Client ]
-      │
-  (1) ▼ [ Global Edge / GeoDNS / Anycast CDN ]
-      │
-  (2) ▼ [ L3/L4 Network Infrastructure / BGP ECMP / Cloud NLB ]
-      │
-  (3) ▼ [ L7 Ingress Gateway / TLS Termination / Reverse Proxy ]
-      │
-  (2) ▼ [ Node Kernel L4: kube-proxy (iptables / IPVS ClusterIP DNAT) ]
-      │
-  (4) ▼ [ Pod Envoy Sidecar (Service Mesh East-West) ]
-      │
-  (5) ▼ [ JVM Process: Client-Side LoadBalancer (Spring Cloud / gRPC) ]
-      │
-  (6) ◄── [ Kubernetes Scheduler & HPA: Compute & Resource Placement ]
-      │
-  (7) ◄── [ Kafka / RabbitMQ: Queue & Partition Consumer Balancing ]
+```mermaid
+flowchart TD
+    Client["Client"]
+
+    subgraph EdgeTier["1. Global & Anycast Edge Tier"]
+        Edge["GeoDNS / Anycast / CDN"]
+    end
+
+    subgraph NetworkTier["2. Network / Transport Tier (L3/L4)"]
+        NLB["BGP ECMP / Cloud NLB"]
+    end
+
+    subgraph IngressTier["3. Application / Reverse Proxy Tier (L7 Ingress)"]
+        Ingress["Ingress Gateway: TLS Termination, HTTP Routing"]
+    end
+
+    subgraph KernelTier["2. Network / Transport Tier (Node Kernel L4)"]
+        KubeProxy["kube-proxy: iptables / IPVS ClusterIP DNAT"]
+    end
+
+    subgraph MeshTier["4. Service Mesh Tier (East-West)"]
+        Sidecar["Envoy Sidecar"]
+    end
+
+    subgraph ClientTier["5. Client-Side Load Balancing Tier"]
+        ClientLB["JVM: Spring Cloud LoadBalancer / gRPC"]
+    end
+
+    subgraph SchedulingTier["6. Compute & Orchestration Scheduling Tier"]
+        Scheduler["kube-scheduler & HPA"]
+    end
+
+    subgraph QueueTier["7. Asynchronous Messaging & Queue Tier"]
+        Queues["Kafka Partitions / RabbitMQ Competing Consumers"]
+    end
+
+    %% Request Path
+    Client -->|DNS / Anycast Routing| Edge
+    Edge -->|Region / AZ Selection| NLB
+    NLB -->|TCP 5-Tuple Hash| Ingress
+    Ingress -->|Upstream HTTP to ClusterIP| KubeProxy
+    KubeProxy -->|DNAT to Pod IP| Sidecar
+    Sidecar -->|Local Delivery| ClientLB
+
+    %% Placement & Asynchronous Balancing
+    Scheduler -.->|Pod Placement & Replica Count| KubeProxy
+    Queues -.->|Partition / Message Distribution| ClientLB
 ```
 
 ### 6.2. Layer 4 (Transport Layer) — `kube-proxy`
@@ -195,7 +303,7 @@ The design and evaluation of load balancing strategies across L4 and L7 are root
    * *Application:* Models scaling limits of horizontal pod replication. Least Connections introduces contention delay $\sigma$ and coherency overhead $\kappa$ when coordinating global connection counts across nodes, whereas P2C maintains $\sigma \approx 0$ and $\kappa \approx 0$ via independent local sampling.
 
 5. **CAP / PACELC Asymmetry in Kubernetes:**
-   * Kubernetes employs a strict **CP** control plane (etcd via Raft consensus) alongside an **AP (Eventual Consistency)** data plane (asynchronous rule distribution to worker nodes via kube-proxy).
+   * Kubernetes employs a strict **CP** control plane (etcd via Raft consensus in multi-server clusters; the local single-server k3s uses SQLite via kine) alongside an **AP (Eventual Consistency)** data plane (asynchronous rule distribution to worker nodes via kube-proxy).
    * *Application:* This fundamental distributed systems asymmetry produces the transient propagation window ($\Delta t \approx 1-4$s) during pod termination, necessitating the `preStop: sleep 10` hook to maintain zero-downtime availability.
 
 6. **End-to-End Arguments in System Design (Saltzer, Reed, Clark 1984):**
@@ -205,7 +313,7 @@ The design and evaluation of load balancing strategies across L4 and L7 are root
 
 ## 7. Custom Load Balancer Research Prototype
 
-To provide empirical validation for dissertation research and demonstrate deep systems expertise beyond standard Kubernetes abstraction, this project includes designing and benchmarking a **lightweight custom Layer 7 load balancer in Java 21**:
+To provide empirical validation for dissertation research and demonstrate deep systems expertise beyond standard Kubernetes abstraction, a companion research prototype (kept outside this repository) designs and benchmarks a **lightweight custom Layer 7 load balancer in Java 21**:
 
 ### Architecture
 * Built using **Java 21 Virtual Threads (Project Loom)** to handle high-concurrency client sockets with minimal thread overhead.
@@ -250,7 +358,7 @@ export PATH="$HOME/.local/bin:$PATH"
      --port "8080:80@loadbalancer" \
      --network lodestar_default
    ```
-   *Note:* Attaching `--network lodestar_default` bridges the Kubernetes pods directly to the Docker Compose DNS resolver (`lodestar-kafka:29092`, `lodestar-postgres:5432`, `lodestar-redis:6379`, `lodestar-rabbitmq:5672`), completely resolving the Kafka Advertised Listeners loopback issue.
+   *Note:* `--network lodestar_default` attaches the k3d nodes to the Docker Compose network, so pods reach `lodestar-kafka:29092`, `lodestar-postgres:5432`, `lodestar-redis:6379` and `lodestar-rabbitmq:5672` by name and the Kafka advertised listener `kafka:29092` resolves (section 2.4).
 
 3. **Build Application Artifact & Container Image:**
    ```bash
@@ -262,6 +370,7 @@ export PATH="$HOME/.local/bin:$PATH"
    ```bash
    k3d image import lodestar:latest -c lodestar-cluster
    ```
+   *Note:* each node has its own `containerd` image store, separate from the host Docker daemon; `k3d image import` loads the image into every node. The Deployment uses `imagePullPolicy: IfNotPresent`: for the `:latest` tag the default would be `Always`, and the kubelet would try to pull `docker.io/library/lodestar:latest` (`ErrImagePull`).
 
 5. **Apply Kubernetes Manifests:**
    ```bash
@@ -271,6 +380,7 @@ export PATH="$HOME/.local/bin:$PATH"
    kubectl apply -f k8s/service.yaml
    kubectl apply -f k8s/ingress.yaml
    kubectl apply -f k8s/hpa.yaml
+   kubectl apply -f k8s/pdb.yaml
    ```
 
 6. **Verify Cluster Readiness:**
@@ -318,7 +428,7 @@ kubectl rollout status deployment/lodestar
 * **Complete Teardown (Clean Purge):**
   ```bash
   k3d cluster delete lodestar-cluster
-  docker compose down -v
+  docker compose down -v   # -v also deletes the PostgreSQL, Kafka, RabbitMQ and Redis data volumes
   ```
 
 ---
@@ -326,13 +436,13 @@ kubectl rollout status deployment/lodestar
 ## 9. Empirical Validation & Stress Test Metrics
 
 ### 9.1. HPA Spike Stress Test (`k6`)
-Executed under high concurrency spike profile using `tests/load/k6-spike-test.js`:
-* **Concurreny:** 150 concurrent Virtual Users (VUs)
+Executed under high concurrency spike profile using `tests/load/k6-spike-test.js` (measured before the 15.10.2026 resource change: memory requests/limits 512Mi/768Mi, `MaxRAMPercentage=75`):
+* **Concurrency:** 150 concurrent Virtual Users (VUs)
 * **Duration:** 75 seconds
 * **Total HTTP Requests Executed:** 24,202 requests
 * **HTTP Failure Rate:** **0.00% (0 errors out of 24,202 checks)**
 * **HTTP 502 / Connection Resets:** **Zero (0)**
-* **HPA Dynamics:** Automatically scaled the deployment from 1 replica to 5 replicas under 299% peak CPU load, and gracefully scaled down back to 1 replica post cool-down.
+* **HPA Dynamics** (at that time `minReplicas: 1`; now 2): Automatically scaled the deployment from 1 replica to 5 replicas under 299% peak CPU load, and gracefully scaled down back to 1 replica post cool-down.
 
 ### 9.2. Comparative L7 Balancer Benchmark (Project Loom Virtual Threads)
 Benchmarked 30 concurrent VUs over 15-second sustained intervals across 3 cluster worker nodes (`172.18.0.6`, `172.18.0.7`, `172.18.0.8`):

@@ -5,7 +5,7 @@ metadata:
   labels:
     app: lodestar
 spec:
-  replicas: 2
+  # replicas is owned by the HorizontalPodAutoscaler (k8s/hpa.yaml); setting it here would override HPA decisions on every apply
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -20,6 +20,13 @@ spec:
         app: lodestar
     spec:
       terminationGracePeriodSeconds: 45
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: lodestar
       containers:
       - name: lodestar
         image: lodestar:latest
@@ -30,10 +37,10 @@ spec:
         resources:
           requests:
             cpu: 250m
-            memory: 512Mi
+            memory: 1Gi
           limits:
             cpu: 1000m
-            memory: 768Mi
+            memory: 1Gi
         envFrom:
         - configMapRef:
             name: lodestar-config
