@@ -94,7 +94,7 @@ When running Lodestar in a multi-pod cluster (e.g., Kubernetes Deployment scaled
 ### Recommended Architectural Patterns:
 
 * **Pattern A: Leader Election via Redis (Universal / Active-Standby):**
-  * All pods share Redis. Exactly one pod acquires a distributed lease (`lodestar:leader:alert-ingest`) with a heartbeat TTL.
+  * All pods share Redis. Exactly one pod acquires a distributed lease (`lodestar:leader:alert-ingest`) with a heartbeat TTL; renewal and release are atomic owner-checking Lua scripts (see `docs/Kubernetes_Deployment.md`).
   * Only the active leader runs the scheduled ingestion worker. If the leader fails, another pod acquires the lock on the next cycle without interruption.
   * *Advantage:* Operates consistently across local Docker Compose and cloud Kubernetes environments.
 

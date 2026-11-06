@@ -103,10 +103,13 @@ Lodestar follows 12-Factor App design principles. All application replicas deplo
 While REST and messaging workloads scale horizontally, polling external rate-limited APIs (such as `alerts.in.ua`) requires strict singleton execution:
 * **The Problem:** If 5 horizontally scaled pods each poll an external API every 15 seconds, the effective request rate multiplies to once every 3 seconds, triggering immediate `HTTP 429 Too Many Requests` and API token suspension.
 * **The Architecture:** Lodestar uses **Redis-Backed Leader Election**:
-  * An elected leader lock (`lodestar:leader:alert-ingest`) is acquired using an atomic Redis `SETNX` lease (TTL 20s) renewed by a heartbeat every 7s; the instance ID is the pod name (`HOSTNAME` from the Downward API).
+  * An elected leader lock (`lodestar:leader:alert-ingest`) is acquired with an atomic Redis `SET NX` lease (TTL 20s) renewed by a heartbeat every 7s; the instance ID is the pod name (`HOSTNAME` from the Downward API).
+  * Renewal and release are Lua scripts that check the owner and change the key in one atomic step, so a pod whose lease has already expired cannot extend or delete the lease of the new leader.
+  * A pod counts its leadership from the moment it *sent* the last successful acquire / renew and stops acting as leader once the TTL has passed, even before the next heartbeat (protection against long GC pauses or CPU throttling).
   * Only the active leader pod executes `AlertIngestWorker`.
   * Non-leader replicas remain in hot standby for ingestion while continuing to process incoming HTTP requests and messaging streams.
-  * If the leader pod terminates, an active standby replica acquires the lease on the subsequent cycle, ensuring continuous ingestion without duplicate external requests.
+  * If the leader pod terminates, it releases the lease on shutdown and an active standby replica acquires it on the subsequent cycle, ensuring continuous ingestion.
+  * Limitation: there is no fencing token, so around a lease change two pods can briefly both poll (one extra external request at most). This is acceptable for polling; operations that must never run twice would need fencing on the receiving side.
 
 ### 2.3. Infrastructure Placement Strategy
 * **Data & Messaging Tier (PostgreSQL, Kafka, RabbitMQ, Redis):**  
